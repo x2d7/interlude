@@ -23,7 +23,6 @@ type Tool struct {
 
 type ToolFunction func(input any) (string, error)
 
-
 func NewTools() Tools { return Tools{} }
 
 func (t *Tools) Add(tool Tool) { *t = append(*t, tool) }

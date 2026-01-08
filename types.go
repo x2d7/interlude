@@ -1,8 +1,6 @@
 package interlude
 
 import (
-	"sync"
-
 	"github.com/openai/openai-go/v3"
 )
 
@@ -45,19 +43,9 @@ type ModelConnector struct {
 	Tools    Tools
 }
 
-// Messages is a slice of events that later converts to messages for text completion
-type Messages struct {
-	mu     sync.Mutex
-	Events []EventData
-}
-
 type EventData struct {
 	EventType   EventType
 	Data        any
 	RawJSON     string
 	ToolSuccess bool
 }
-
-type OpenAIMessages []openai.ChatCompletionMessageParamUnion
-
-type SendFunction func(content string) openai.ChatCompletionMessageParamUnion
