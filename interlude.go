@@ -3,7 +3,6 @@ package interlude
 import (
 	"context"
 	"fmt"
-	"os"
 
 	"strings"
 	"sync"
@@ -46,20 +45,10 @@ type Messages struct {
 	Events []EventData
 }
 
-func DefaultMessages() *Messages {
+func MessagesEmpty() *Messages {
 	m := &Messages{
 		Events: make([]EventData, 0),
 	}
-
-	data, err := os.ReadFile("prompts/system.txt")
-	if err != nil {
-		panic("failed to read prompts/system.txt: " + err.Error())
-	}
-
-	m.AddEvent(EventData{
-		EventType: EventNewSystemMessage,
-		Data:      string(data),
-	})
 
 	return m
 }
