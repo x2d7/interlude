@@ -14,7 +14,7 @@ func pipe[T any](src <-chan T, dst chan<- T, handler func(T)) {
 	for v := range src {
 		dst <- v
 		if handler != nil {
-			go handler(v)
+			handler(v)
 		}
 	}
 }
