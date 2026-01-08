@@ -10,17 +10,6 @@ import (
 	"github.com/openai/openai-go/v3"
 )
 
-type Tool struct {
-	Name        string
-	Description string
-	Func        func(input any) (string, error)
-
-	InputType reflect.Type
-	Schema    map[string]any
-}
-
-type Tools []Tool
-
 func NewTools() Tools { return Tools{} }
 
 func (t *Tools) Add(tool Tool) { *t = append(*t, tool) }
