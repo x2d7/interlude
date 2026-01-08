@@ -1,7 +1,6 @@
 package interlude
 
 import (
-	"reflect"
 	"sync"
 
 	"github.com/openai/openai-go/v3"
@@ -58,19 +57,6 @@ type EventData struct {
 	RawJSON     string
 	ToolSuccess bool
 }
-
-type Tools []Tool
-
-type Tool struct {
-	Name        string
-	Description string
-	Func        ToolFunction
-
-	InputType reflect.Type
-	Schema    map[string]any
-}
-
-type ToolFunction func(input any) (string, error)
 
 type OpenAIMessages []openai.ChatCompletionMessageParamUnion
 
