@@ -57,15 +57,6 @@ func Complete(ctx context.Context, client *openai.Client, connector *ModelConnec
 	return nil
 }
 
-func pipe[T any](src <-chan T, dst chan<- T, handler func(T)) {
-	for v := range src {
-		dst <- v
-		if handler != nil {
-			go handler(v)
-		}
-	}
-}
-
 func (c Chat) SendStream(ctx context.Context, userMessage string, events chan<- EventData, senderType SenderType) error {
 	defer close(events)
 
@@ -134,12 +125,4 @@ func (c Chat) SendStream(ctx context.Context, userMessage string, events chan<- 
 			return nil
 		}
 	}
-}
-
-func (c Chat) SendUserStream(ctx context.Context, userMessage string, events chan<- EventData) error {
-	return c.SendStream(ctx, userMessage, events, SenderTypeUser)
-}
-
-func (c Chat) SendToolStream(ctx context.Context, userMessage string, events chan<- EventData) error {
-	return c.SendStream(ctx, userMessage, events, SenderTypeTool)
 }
