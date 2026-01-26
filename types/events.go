@@ -1,17 +1,5 @@
 package types
 
-import (
-	"context"
-
-	"github.com/openai/openai-go/v3/packages/ssestream"
-)
-
-// Client interface represents the LLM connector client
-type Client interface {
-	NewStreaming(ctx context.Context) *ssestream.Stream[StreamEvent]
-	SyncInput(chat *Chat)
-}
-
 // eventType represents the type of event
 type eventType uint
 
@@ -30,17 +18,10 @@ const (
 	eventNewError
 )
 
-// StreamEvent represents a stream event
-type StreamEvent interface {
-	GetType() eventType
+// eventNewContent is a base type for simple event types
+type eventNewContent struct {
+	Content string
 }
-
-// EventNewToken represents a new token event
-type EventNewToken struct {
-	Token string
-}
-
-func (e EventNewToken) GetType() eventType { return eventNewToken }
 
 // EventNewToolCall represents a new tool call event
 type EventNewToolCall struct {
@@ -50,37 +31,39 @@ type EventNewToolCall struct {
 
 func (e EventNewToolCall) GetType() eventType { return eventNewToolCall }
 
-// EventNewUserMessage represents a new user message event
-type EventNewUserMessage struct {
-	Message string
+// EventNewError represents a new error event
+type EventNewError struct {
+	Error error
 }
+
+func (e EventNewError) GetType() eventType { return eventNewError }
+
+// EventNewToken represents a new token event
+type EventNewToken eventNewContent
+
+func (e EventNewToken) GetType() eventType { return eventNewToken }
+
+// EventNewUserMessage represents a new user message event
+type EventNewUserMessage eventNewContent
 
 func (e EventNewUserMessage) GetType() eventType { return eventNewUserMessage }
 
 // EventNewAssistantMessage represents a new assistant message event
-type EventNewAssistantMessage struct {
-	Message string
-}
+type EventNewAssistantMessage eventNewContent
 
 func (e EventNewAssistantMessage) GetType() eventType { return eventNewAssistantMessage }
 
 // EventNewSystemMessage represents a new system message event
-type EventNewSystemMessage struct {
-	Message string
-}
+type EventNewSystemMessage eventNewContent
 
 func (e EventNewSystemMessage) GetType() eventType { return eventNewSystemMessage }
 
 // EventNewToolMessage represents a new tool message event
-type EventNewToolMessage struct {
-	Message string
-}
+type EventNewToolMessage eventNewContent
 
 func (e EventNewToolMessage) GetType() eventType { return eventNewToolMessage }
 
-// EventNewError represents a new error event
-type EventNewError struct {
-	Error string
+// StreamEvent represents a stream event
+type StreamEvent interface {
+	GetType() eventType
 }
-
-func (e EventNewError) GetType() eventType { return eventNewError }
