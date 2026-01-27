@@ -24,9 +24,13 @@ func (c *Chat) AddMessage(sender types.Sender, content string) error {
 		return ErrUnsupportedSender
 	}
 
-	c.Messages.Events = append(c.Messages.Events, newEvent)
+	c.AppendEvent(newEvent)
 
 	return nil
+}
+
+func (c *Chat) AppendEvent(event types.StreamEvent) {
+	c.Messages.Events = append(c.Messages.Events, event)
 }
 
 func (c *Chat) SendStream(ctx context.Context, client Client, sender types.Sender, content string) chan types.StreamEvent {
