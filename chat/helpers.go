@@ -42,7 +42,7 @@ func (c *Chat) SendStream(ctx context.Context, client Client, sender types.Sende
 		return result
 	}
 
-	return c.Complete(ctx, client)
+	return c.Session(ctx, client)
 }
 
 func (c *Chat) SendUserStream(ctx context.Context, client Client, content string) chan types.StreamEvent {
