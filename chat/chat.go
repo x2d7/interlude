@@ -10,9 +10,6 @@ import (
 func (c *Chat) Complete(ctx context.Context, client Client) chan types.StreamEvent {
 	result := make(chan types.StreamEvent, 16)
 
-	// insert chat context into client input configuration
-	client.SyncInput(c)
-
 	// sending events to the channel in background
 	go func() {
 		defer close(result)
@@ -44,9 +41,14 @@ func (c *Chat) Complete(ctx context.Context, client Client) chan types.StreamEve
 }
 
 func (c *Chat) Session(ctx context.Context, client Client) chan types.StreamEvent {
+	// insert chat context into client input configuration
+	client.SyncInput(c)
+
+	// creating the channels
 	result := make(chan types.StreamEvent, 16)
 	events := c.Complete(ctx, client)
 
+	// event handling
 	go func() {
 		defer close(result)
 
@@ -54,9 +56,11 @@ func (c *Chat) Session(ctx context.Context, client Client) chan types.StreamEven
 		var stringBuilder strings.Builder
 		toolCalls := make([]types.EventNewToolCall, 0)
 
-		// adding collected events to the chat
+		// adding collected events to the chat (assistant's tokens and tool calls)
 		defer func() {
-			c.AppendEvent(types.EventNewAssistantMessage{Content: stringBuilder.String()})
+			if stringBuilder.Len() != 0 {
+				c.AppendEvent(types.EventNewAssistantMessage{Content: stringBuilder.String()})
+			}
 			for _, call := range toolCalls {
 				c.AppendEvent(call)
 			}
@@ -67,7 +71,9 @@ func (c *Chat) Session(ctx context.Context, client Client) chan types.StreamEven
 			case <-ctx.Done():
 				return
 			case ev, ok := <-events:
-				if !ok {
+				// closing the result channel if the events channel is closed
+				// TODO: in future expected behavior will different: result channel will be closed if all tool calls are processed and text completion is done
+				if !ok { 
 					return
 				}
 
