@@ -4,4 +4,5 @@ import "errors"
 
 var (
     ErrUnsupportedSender = errors.New("unsupported sender type")
+    ErrNilStreaming      = errors.New("streaming object is nil")
 )

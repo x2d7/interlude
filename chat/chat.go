@@ -18,17 +18,17 @@ func (c *Chat) Complete(ctx context.Context, client Client) chan types.StreamEve
 		// event collectors
 		var stringBuilder strings.Builder
 		toolCalls := make([]types.EventNewToolCall, 0)
-		
+
 		// text completion stream
 		stream := client.NewStreaming(ctx)
+		if stream == nil {
+			result <- types.EventNewError{Error: ErrNilStreaming}
+			close(result)
+			return
+		}
 		defer stream.Close()
 
-		ok := true
-		for {
-			ok = stream.Next()
-			if !ok {
-				break
-			}
+		for stream.Next() {
 			chunk := stream.Current()
 
 			// collecting events
@@ -38,8 +38,12 @@ func (c *Chat) Complete(ctx context.Context, client Client) chan types.StreamEve
 			case types.EventNewToolCall:
 				toolCalls = append(toolCalls, event)
 			}
-			
-			result <- chunk
+
+			select {
+			case result <- chunk:
+			case <-ctx.Done():
+				return
+			}
 		}
 
 		// adding collected events to the chat
@@ -48,8 +52,8 @@ func (c *Chat) Complete(ctx context.Context, client Client) chan types.StreamEve
 			c.AppendEvent(call)
 		}
 
-		if stream.Err() != nil {
-			result <- types.EventNewError{Error: stream.Err()}
+		if err := stream.Err(); err != nil {
+			result <- types.EventNewError{Error: err}
 		}
 
 		close(result)
