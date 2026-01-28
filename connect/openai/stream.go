@@ -77,11 +77,32 @@ func (s *OpenAIStream) handleRawChunk(chunk openai.ChatCompletionChunk) ([]types
 	return events, nil
 }
 
-// TODO: implement handleRawChunk
+// TODO: support more than 1 completion
 
 // _handleRawChunk extracts list of events from raw openai chunk
 //
 // Should not return empty list. It would be considered as an error
-func (s *OpenAIStream) _handleRawChunk(_ openai.ChatCompletionChunk) ([]types.StreamEvent, error) {
-	return []types.StreamEvent{}, errors.New("not implemented")
+func (s *OpenAIStream) _handleRawChunk(chunk openai.ChatCompletionChunk) ([]types.StreamEvent, error) {
+	result := make([]types.StreamEvent, 0)
+	choice := chunk.Choices[0]
+
+	delta := choice.Delta
+
+	content := delta.Content
+	refusal := delta.Refusal
+	tools := delta.ToolCalls
+
+	if content != "" {
+		result = append(result, types.EventNewToken{Content: content})
+	}
+
+	if refusal != "" {
+		result = append(result, types.EventNewRefusal{Content: refusal})
+	}
+
+	for _, tool := range tools {
+		result = append(result, types.EventNewToolCall{CallID: tool.ID, RawJSON: tool.RawJSON()}) // TODO: improve ToolCall event data model
+	}
+
+	return result, nil
 }
