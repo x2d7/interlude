@@ -83,6 +83,8 @@ func (c *Chat) Session(ctx context.Context, client Client) chan types.StreamEven
 					stringBuilder.WriteString(event.Content)
 				case types.EventNewToolCall:
 					toolCalls = append(toolCalls, event)
+				case types.EventNewRefusal:
+					c.AppendEvent(event)
 				}
 
 				// sending events to the channel

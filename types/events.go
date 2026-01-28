@@ -8,6 +8,7 @@ const (
 
 	eventNewToken eventType = iota
 	eventNewToolCall
+	eventNewRefusal
 
 	// events produced by consumer
 
@@ -65,6 +66,11 @@ func (e EventNewSystemMessage) GetType() eventType { return eventNewSystemMessag
 type EventNewToolMessage eventNewContent
 
 func (e EventNewToolMessage) GetType() eventType { return eventNewToolMessage }
+
+// EventNewRefusal represents a new refusal event
+type EventNewRefusal eventNewContent
+
+func (e EventNewRefusal) GetType() eventType { return eventNewRefusal }
 
 // StreamEvent represents a stream event
 type StreamEvent interface {
