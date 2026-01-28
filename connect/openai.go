@@ -38,6 +38,9 @@ func (c *OpenAIClient) SyncInput(chat *chat.Chat) {
 
 // TODO: Добавить в будущем возможность класть метадату в события (учет стоимости, айди генерации)
 
+// OpenAIStream is a wrapper around openai-go's SSEStream
+//
+// Implements types.Stream interface
 type OpenAIStream struct {
 	queue []types.StreamEvent
 	err   error
@@ -90,6 +93,7 @@ func (s *OpenAIStream) Close() error {
 	return s.SSEStream.Close()
 }
 
+// embedded decorator for _handleRawChunk
 func (s *OpenAIStream) handleRawChunk(chunk openai.ChatCompletionChunk) ([]types.StreamEvent, error) {
 	events, err := s._handleRawChunk(chunk)
 	if err != nil {
@@ -101,6 +105,11 @@ func (s *OpenAIStream) handleRawChunk(chunk openai.ChatCompletionChunk) ([]types
 	return events, nil
 }
 
+// TODO: implement handleRawChunk
+
+// _handleRawChunk extracts list of events from raw openai chunk
+//
+// Should not return empty list. It would be considered as an error
 func (s *OpenAIStream) _handleRawChunk(_ openai.ChatCompletionChunk) ([]types.StreamEvent, error) {
 	return []types.StreamEvent{}, errors.New("not implemented")
 }
