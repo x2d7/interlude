@@ -5,16 +5,19 @@ type eventType uint
 
 const (
 	// events produced by the text completion
+
 	eventNewToken eventType = iota
 	eventNewToolCall
 
 	// events produced by consumer
+
 	eventNewUserMessage
 	eventNewAssistantMessage
 	eventNewSystemMessage
 	eventNewToolMessage
 
 	// error event
+
 	eventNewError
 )
 
