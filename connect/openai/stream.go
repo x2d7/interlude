@@ -10,7 +10,7 @@ import (
 
 // TODO: Добавить в будущем возможность класть метадату в события (учет стоимости, айди генерации)
 
-// OpenAIStream is a wrapper around openai-go's SSEStream
+// OpenAIStream is a wrapper for OpenAI SSEStream
 //
 // Implements types.Stream interface
 type OpenAIStream struct {
