@@ -3,7 +3,6 @@ package chat
 import (
 	"context"
 
-	"github.com/openai/openai-go/v3/packages/ssestream"
 	"github.com/x2d7/interlude/types"
 )
 
@@ -15,6 +14,6 @@ type Chat struct {
 
 // Client interface represents the LLM connector client
 type Client interface {
-	NewStreaming(ctx context.Context) *ssestream.Stream[types.StreamEvent]
+	NewStreaming(ctx context.Context) types.Stream[types.StreamEvent]
 	SyncInput(chat *Chat)
 }

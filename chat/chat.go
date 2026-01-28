@@ -15,13 +15,13 @@ func (c *Chat) Complete(ctx context.Context, client Client) chan types.StreamEve
 
 	// sending events to the channel in background
 	go func() {
-		// text completion stream
-		stream := client.NewStreaming(ctx)
-		defer func() { _ = stream.Close() }()
-
 		// event collectors
 		var stringBuilder strings.Builder
 		toolCalls := make([]types.EventNewToolCall, 0)
+		
+		// text completion stream
+		stream := client.NewStreaming(ctx)
+		defer stream.Close()
 
 		ok := true
 		for {
