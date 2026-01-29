@@ -5,7 +5,7 @@ import (
 
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/packages/ssestream"
-	"github.com/x2d7/interlude/types"
+	"github.com/x2d7/interlude/chat"
 )
 
 // TODO: Добавить в будущем возможность класть метадату в события (учет стоимости, айди генерации)
@@ -14,9 +14,9 @@ import (
 //
 // Implements types.Stream interface
 type OpenAIStream struct {
-	queue []types.StreamEvent
+	queue []chat.StreamEvent
 	err   error
-	cur   types.StreamEvent
+	cur   chat.StreamEvent
 
 	OpenAIClient *OpenAIClient
 	SSEStream    *ssestream.Stream[openai.ChatCompletionChunk]
@@ -53,7 +53,7 @@ func (s *OpenAIStream) Next() bool {
 	return true
 }
 
-func (s *OpenAIStream) Current() types.StreamEvent {
+func (s *OpenAIStream) Current() chat.StreamEvent {
 	return s.cur
 }
 
@@ -66,7 +66,7 @@ func (s *OpenAIStream) Close() error {
 }
 
 // embedded decorator for _handleRawChunk
-func (s *OpenAIStream) handleRawChunk(chunk openai.ChatCompletionChunk) ([]types.StreamEvent, error) {
+func (s *OpenAIStream) handleRawChunk(chunk openai.ChatCompletionChunk) ([]chat.StreamEvent, error) {
 	events, err := s._handleRawChunk(chunk)
 	if err != nil {
 		return nil, err
@@ -82,8 +82,8 @@ func (s *OpenAIStream) handleRawChunk(chunk openai.ChatCompletionChunk) ([]types
 // _handleRawChunk extracts list of events from raw openai chunk
 //
 // Should not return empty list. It would be considered as an error
-func (s *OpenAIStream) _handleRawChunk(chunk openai.ChatCompletionChunk) ([]types.StreamEvent, error) {
-	result := make([]types.StreamEvent, 0)
+func (s *OpenAIStream) _handleRawChunk(chunk openai.ChatCompletionChunk) ([]chat.StreamEvent, error) {
+	result := make([]chat.StreamEvent, 0)
 	choice := chunk.Choices[0]
 
 	delta := choice.Delta
@@ -93,15 +93,15 @@ func (s *OpenAIStream) _handleRawChunk(chunk openai.ChatCompletionChunk) ([]type
 	tools := delta.ToolCalls
 
 	if content != "" {
-		result = append(result, types.EventNewToken{Content: content})
+		result = append(result, chat.EventNewToken{Content: content})
 	}
 
 	if refusal != "" {
-		result = append(result, types.EventNewRefusal{Content: refusal})
+		result = append(result, chat.EventNewRefusal{Content: refusal})
 	}
 
 	for _, tool := range tools {
-		result = append(result, types.EventNewToolCall{CallID: tool.ID, RawJSON: tool.RawJSON()}) // TODO: improve ToolCall event data model
+		result = append(result, chat.EventNewToolCall{CallID: tool.ID, RawJSON: tool.RawJSON()}) // TODO: improve ToolCall event data model
 	}
 
 	return result, nil

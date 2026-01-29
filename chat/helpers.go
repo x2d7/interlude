@@ -2,24 +2,22 @@ package chat
 
 import (
 	"context"
-
-	"github.com/x2d7/interlude/types"
 )
 
-func (c *Chat) AddMessage(sender types.Sender, content string) error {
-	var newEvent types.StreamEvent
+func (c *Chat) AddMessage(sender Sender, content string) error {
+	var newEvent StreamEvent
 
 	switch s := sender.(type) {
-	case types.SenderUser:
-		newEvent = types.EventNewUserMessage{Content: content}
-	case types.SenderAssistant:
-		newEvent = types.EventNewAssistantMessage{Content: content}
-	case types.SenderSystem:
-		newEvent = types.EventNewSystemMessage{Content: content}
-	case types.SenderTool:
-		newEvent = types.EventNewToolMessage{Content: content}
-	case types.SenderToolCaller:
-		newEvent = types.EventNewToolCall{CallID: s.CallId, RawJSON: content}
+	case SenderUser:
+		newEvent = EventNewUserMessage{Content: content}
+	case SenderAssistant:
+		newEvent = EventNewAssistantMessage{Content: content}
+	case SenderSystem:
+		newEvent = EventNewSystemMessage{Content: content}
+	case SenderTool:
+		newEvent = EventNewToolMessage{Content: content}
+	case SenderToolCaller:
+		newEvent = EventNewToolCall{CallID: s.CallId, RawJSON: content}
 	default:
 		return ErrUnsupportedSender
 	}
@@ -29,15 +27,15 @@ func (c *Chat) AddMessage(sender types.Sender, content string) error {
 	return nil
 }
 
-func (c *Chat) AppendEvent(event types.StreamEvent) {
+func (c *Chat) AppendEvent(event StreamEvent) {
 	c.Messages.Events = append(c.Messages.Events, event)
 }
 
-func (c *Chat) SendStream(ctx context.Context, client Client, sender types.Sender, content string) chan types.StreamEvent {
+func (c *Chat) SendStream(ctx context.Context, client Client, sender Sender, content string) chan StreamEvent {
 	err := c.AddMessage(sender, content)
 	if err != nil {
-		result := make(chan types.StreamEvent, 1)
-		result <- types.EventNewError{Error: err}
+		result := make(chan StreamEvent, 1)
+		result <- EventNewError{Error: err}
 		close(result)
 		return result
 	}
@@ -45,22 +43,22 @@ func (c *Chat) SendStream(ctx context.Context, client Client, sender types.Sende
 	return c.Session(ctx, client)
 }
 
-func (c *Chat) SendUserStream(ctx context.Context, client Client, content string) chan types.StreamEvent {
-	return c.SendStream(ctx, client, types.SenderUser{}, content)
+func (c *Chat) SendUserStream(ctx context.Context, client Client, content string) chan StreamEvent {
+	return c.SendStream(ctx, client, SenderUser{}, content)
 }
 
-func (c *Chat) SendAssistantStream(ctx context.Context, client Client, content string) chan types.StreamEvent {
-	return c.SendStream(ctx, client, types.SenderAssistant{}, content)
+func (c *Chat) SendAssistantStream(ctx context.Context, client Client, content string) chan StreamEvent {
+	return c.SendStream(ctx, client, SenderAssistant{}, content)
 }
 
-func (c *Chat) SendSystemStream(ctx context.Context, client Client, content string) chan types.StreamEvent {
-	return c.SendStream(ctx, client, types.SenderSystem{}, content)
+func (c *Chat) SendSystemStream(ctx context.Context, client Client, content string) chan StreamEvent {
+	return c.SendStream(ctx, client, SenderSystem{}, content)
 }
 
-func (c *Chat) SendToolStream(ctx context.Context, client Client, content string) chan types.StreamEvent {
-	return c.SendStream(ctx, client, types.SenderTool{}, content)
+func (c *Chat) SendToolStream(ctx context.Context, client Client, content string) chan StreamEvent {
+	return c.SendStream(ctx, client, SenderTool{}, content)
 }
 
-func (c *Chat) SendToolCallStream(ctx context.Context, client Client, callId string, content string) chan types.StreamEvent {
-	return c.SendStream(ctx, client, types.SenderToolCaller{CallId: callId}, content)
+func (c *Chat) SendToolCallStream(ctx context.Context, client Client, callId string, content string) chan StreamEvent {
+	return c.SendStream(ctx, client, SenderToolCaller{CallId: callId}, content)
 }

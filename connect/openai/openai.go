@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"github.com/x2d7/interlude/chat"
-	"github.com/x2d7/interlude/types"
 
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/option"
@@ -13,18 +12,19 @@ import (
 type OpenAIClient struct {
 	Endpoint string
 	APIKey   string
-	Model    string
+
+	Params openai.ChatCompletionNewParams
 
 	RequestOptions []option.RequestOption
-} // TODO: drastically improve config
+}
 
-func (c *OpenAIClient) NewStreaming(ctx context.Context) types.Stream[types.StreamEvent] {
+func (c *OpenAIClient) NewStreaming(ctx context.Context) chat.Stream[chat.StreamEvent] {
 	stream := &OpenAIStream{
 		OpenAIClient: c,
 	}
 
 	client := getClient(c)
-	params := getParams(c)
+	params := c.Params
 
 	stream.SSEStream = client.Chat.Completions.NewStreaming(ctx, params)
 	return stream
@@ -34,12 +34,6 @@ func (c *OpenAIClient) NewStreaming(ctx context.Context) types.Stream[types.Stre
 func (c *OpenAIClient) SyncInput(chat *chat.Chat) chat.Client {
 	newClient := *c
 	return &newClient
-}
-
-func getParams(c *OpenAIClient) openai.ChatCompletionNewParams {
-	return openai.ChatCompletionNewParams{
-		Model: c.Model,
-	}
 }
 
 func getClient(c *OpenAIClient) *openai.Client {

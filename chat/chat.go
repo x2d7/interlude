@@ -3,12 +3,10 @@ package chat
 import (
 	"context"
 	"strings"
-
-	"github.com/x2d7/interlude/types"
 )
 
-func (c *Chat) Complete(ctx context.Context, client Client) chan types.StreamEvent {
-	result := make(chan types.StreamEvent, 16)
+func (c *Chat) Complete(ctx context.Context, client Client) chan StreamEvent {
+	result := make(chan StreamEvent, 16)
 
 	// sending events to the channel in background
 	go func() {
@@ -17,7 +15,7 @@ func (c *Chat) Complete(ctx context.Context, client Client) chan types.StreamEve
 		// text completion stream
 		stream := client.NewStreaming(ctx)
 		if stream == nil {
-			result <- types.EventNewError{Error: ErrNilStreaming}
+			result <- EventNewError{Error: ErrNilStreaming}
 			return
 		}
 		defer stream.Close()
@@ -33,19 +31,19 @@ func (c *Chat) Complete(ctx context.Context, client Client) chan types.StreamEve
 		}
 
 		if err := stream.Err(); err != nil {
-			result <- types.EventNewError{Error: err}
+			result <- EventNewError{Error: err}
 		}
 	}()
 
 	return result
 }
 
-func (c *Chat) Session(ctx context.Context, client Client) chan types.StreamEvent {
+func (c *Chat) Session(ctx context.Context, client Client) chan StreamEvent {
 	// insert chat context into client input configuration
 	client.SyncInput(c)
 
 	// creating the channels
-	result := make(chan types.StreamEvent, 16)
+	result := make(chan StreamEvent, 16)
 	events := c.Complete(ctx, client)
 
 	// event handling
@@ -54,12 +52,12 @@ func (c *Chat) Session(ctx context.Context, client Client) chan types.StreamEven
 
 		// event collectors
 		var stringBuilder strings.Builder
-		toolCalls := make([]types.EventNewToolCall, 0)
+		toolCalls := make([]EventNewToolCall, 0)
 
 		// adding collected events to the chat (assistant's tokens and tool calls)
 		defer func() {
 			if stringBuilder.Len() != 0 {
-				c.AppendEvent(types.EventNewAssistantMessage{Content: stringBuilder.String()})
+				c.AppendEvent(EventNewAssistantMessage{Content: stringBuilder.String()})
 			}
 			for _, call := range toolCalls {
 				c.AppendEvent(call)
@@ -73,17 +71,17 @@ func (c *Chat) Session(ctx context.Context, client Client) chan types.StreamEven
 			case ev, ok := <-events:
 				// closing the result channel if the events channel is closed
 				// TODO: in future expected behavior will different: result channel will be closed if all tool calls are processed and text completion is done
-				if !ok { 
+				if !ok {
 					return
 				}
 
 				// collecting events
 				switch event := ev.(type) {
-				case types.EventNewToken:
+				case EventNewToken:
 					stringBuilder.WriteString(event.Content)
-				case types.EventNewToolCall:
+				case EventNewToolCall:
 					toolCalls = append(toolCalls, event)
-				case types.EventNewRefusal:
+				case EventNewRefusal:
 					c.AppendEvent(event)
 				}
 

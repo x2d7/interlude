@@ -1,4 +1,4 @@
-package types
+package chat
 
 // eventType represents the type of event
 type eventType uint

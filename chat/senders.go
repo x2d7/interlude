@@ -1,4 +1,4 @@
-package types
+package chat
 
 // senderType represents the type of sender of a message in the chat
 type senderType uint
