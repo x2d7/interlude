@@ -14,6 +14,8 @@ type OpenAIClient struct {
 	Endpoint string
 	APIKey   string
 	Model    string
+
+	RequestOptions []option.RequestOption
 } // TODO: drastically improve config
 
 func (c *OpenAIClient) NewStreaming(ctx context.Context) types.Stream[types.StreamEvent] {
@@ -21,13 +23,10 @@ func (c *OpenAIClient) NewStreaming(ctx context.Context) types.Stream[types.Stre
 		OpenAIClient: c,
 	}
 
-	// TODO: better SSEStream composition
-	client := openai.NewClient(option.WithAPIKey(c.APIKey))
-	params := openai.ChatCompletionNewParams{
-		Model: c.Model,
-	}
+	client := getClient(c)
+	params := getParams(c)
 
-	stream.SSEStream = client.Chat.Completions.NewStreaming(ctx, params, option.WithBaseURL(c.Endpoint))
+	stream.SSEStream = client.Chat.Completions.NewStreaming(ctx, params)
 	return stream
 }
 
@@ -35,4 +34,29 @@ func (c *OpenAIClient) NewStreaming(ctx context.Context) types.Stream[types.Stre
 func (c *OpenAIClient) SyncInput(chat *chat.Chat) chat.Client {
 	newClient := *c
 	return &newClient
+}
+
+func getParams(c *OpenAIClient) openai.ChatCompletionNewParams {
+	return openai.ChatCompletionNewParams{
+		Model: c.Model,
+	}
+}
+
+func getClient(c *OpenAIClient) *openai.Client {
+	requestOptions := make([]option.RequestOption, 0)
+
+	if c.Endpoint != "" {
+		requestOptions = append(requestOptions, option.WithBaseURL(c.Endpoint))
+	}
+
+	if c.APIKey != "" {
+		requestOptions = append(requestOptions, option.WithAPIKey(c.APIKey))
+	}
+
+	if c.RequestOptions != nil {
+		requestOptions = append(requestOptions, c.RequestOptions...)
+	}
+
+	client := openai.NewClient(requestOptions...)
+	return &client
 }
