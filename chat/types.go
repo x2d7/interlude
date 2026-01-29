@@ -14,6 +14,8 @@ type Chat struct {
 
 // Client interface represents the LLM connector client
 type Client interface {
+	// NewStreaming returns a new streaming client instance
 	NewStreaming(ctx context.Context) types.Stream[types.StreamEvent]
-	SyncInput(chat *Chat)
+	// SyncInput return a copy of the client with updated input configuration (messages, tools, etc.)
+	SyncInput(chat *Chat) Client
 }

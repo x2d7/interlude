@@ -31,5 +31,8 @@ func (c *OpenAIClient) NewStreaming(ctx context.Context) types.Stream[types.Stre
 	return stream
 }
 
-func (c *OpenAIClient) SyncInput(chat *chat.Chat) {
+// TODO: implement input configuration syncronization for OpenAI client
+func (c *OpenAIClient) SyncInput(chat *chat.Chat) chat.Client {
+	newClient := *c
+	return &newClient
 }
