@@ -22,8 +22,10 @@ const (
 	eventNewError
 )
 
-// eventNewContent is a base type for simple event types
-type eventNewContent struct {
+// TODO: Добавить в будущем возможность класть метадату в события (учет стоимости, айди генерации)
+
+// EventBase is a base type for simple event types
+type EventBase struct {
 	Content string
 }
 
@@ -43,32 +45,44 @@ type EventNewError struct {
 func (e EventNewError) GetType() eventType { return eventNewError }
 
 // EventNewToken represents a new token event
-type EventNewToken eventNewContent
+type EventNewToken struct {
+	EventBase
+}
 
 func (e EventNewToken) GetType() eventType { return eventNewToken }
 
 // EventNewUserMessage represents a new user message event
-type EventNewUserMessage eventNewContent
+type EventNewUserMessage struct {
+	EventBase
+}
 
 func (e EventNewUserMessage) GetType() eventType { return eventNewUserMessage }
 
 // EventNewAssistantMessage represents a new assistant message event
-type EventNewAssistantMessage eventNewContent
+type EventNewAssistantMessage struct {
+	EventBase
+}
 
 func (e EventNewAssistantMessage) GetType() eventType { return eventNewAssistantMessage }
 
 // EventNewSystemMessage represents a new system message event
-type EventNewSystemMessage eventNewContent
+type EventNewSystemMessage struct {
+	EventBase
+}
 
 func (e EventNewSystemMessage) GetType() eventType { return eventNewSystemMessage }
 
 // EventNewToolMessage represents a new tool message event
-type EventNewToolMessage eventNewContent
+type EventNewToolMessage struct {
+	EventBase
+}
 
 func (e EventNewToolMessage) GetType() eventType { return eventNewToolMessage }
 
 // EventNewRefusal represents a new refusal event
-type EventNewRefusal eventNewContent
+type EventNewRefusal struct {
+	EventBase
+}
 
 func (e EventNewRefusal) GetType() eventType { return eventNewRefusal }
 

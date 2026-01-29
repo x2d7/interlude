@@ -8,8 +8,6 @@ import (
 	"github.com/x2d7/interlude/chat"
 )
 
-// TODO: Добавить в будущем возможность класть метадату в события (учет стоимости, айди генерации)
-
 // OpenAIStream is a wrapper for OpenAI SSEStream
 //
 // Implements types.Stream interface
@@ -93,11 +91,11 @@ func (s *OpenAIStream) _handleRawChunk(chunk openai.ChatCompletionChunk) ([]chat
 	tools := delta.ToolCalls
 
 	if content != "" {
-		result = append(result, chat.EventNewToken{Content: content})
+		result = append(result, chat.EventNewToken{EventBase: chat.EventBase{Content: content}})
 	}
 
 	if refusal != "" {
-		result = append(result, chat.EventNewRefusal{Content: refusal})
+		result = append(result, chat.EventNewRefusal{EventBase: chat.EventBase{Content: content}})
 	}
 
 	for _, tool := range tools {

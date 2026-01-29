@@ -57,7 +57,7 @@ func (c *Chat) Session(ctx context.Context, client Client) chan StreamEvent {
 		// adding collected events to the chat (assistant's tokens and tool calls)
 		defer func() {
 			if stringBuilder.Len() != 0 {
-				c.AppendEvent(EventNewAssistantMessage{Content: stringBuilder.String()})
+				c.AppendEvent(EventNewToken{EventBase: EventBase{Content: stringBuilder.String()}})
 			}
 			for _, call := range toolCalls {
 				c.AppendEvent(call)

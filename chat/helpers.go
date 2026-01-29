@@ -9,13 +9,13 @@ func (c *Chat) AddMessage(sender Sender, content string) error {
 
 	switch s := sender.(type) {
 	case SenderUser:
-		newEvent = EventNewUserMessage{Content: content}
+		newEvent = EventNewUserMessage{EventBase: EventBase{Content: content}}
 	case SenderAssistant:
-		newEvent = EventNewAssistantMessage{Content: content}
+		newEvent = EventNewAssistantMessage{EventBase: EventBase{Content: content}}
 	case SenderSystem:
-		newEvent = EventNewSystemMessage{Content: content}
+		newEvent = EventNewSystemMessage{EventBase: EventBase{Content: content}}
 	case SenderTool:
-		newEvent = EventNewToolMessage{Content: content}
+		newEvent = EventNewToolMessage{EventBase: EventBase{Content: content}}
 	case SenderToolCaller:
 		newEvent = EventNewToolCall{CallID: s.CallId, RawJSON: content}
 	default:
