@@ -31,11 +31,16 @@ type EventBase struct {
 
 // EventNewToolCall represents a new tool call event
 type EventNewToolCall struct {
-	CallID  string
-	RawJSON string
+	EventBase
+	CallID string
 }
 
 func (e EventNewToolCall) GetType() eventType { return eventNewToolCall }
+
+// NewEventNewToolCall creates a new EventNewToolCall
+func NewEventNewToolCall(callID, rawJSON string) EventNewToolCall {
+	return EventNewToolCall{EventBase: EventBase{Content: rawJSON}, CallID: callID}
+}
 
 // EventNewError represents a new error event
 type EventNewError struct {
@@ -44,12 +49,22 @@ type EventNewError struct {
 
 func (e EventNewError) GetType() eventType { return eventNewError }
 
+// NewEventNewError creates a new EventNewError
+func NewEventNewError(err error) EventNewError {
+	return EventNewError{Error: err}
+}
+
 // EventNewToken represents a new token event
 type EventNewToken struct {
 	EventBase
 }
 
 func (e EventNewToken) GetType() eventType { return eventNewToken }
+
+// NewEventNewToken creates a new EventNewToken
+func NewEventNewToken(content string) EventNewToken {
+	return EventNewToken{EventBase: EventBase{Content: content}}
+}
 
 // EventNewUserMessage represents a new user message event
 type EventNewUserMessage struct {
@@ -58,12 +73,22 @@ type EventNewUserMessage struct {
 
 func (e EventNewUserMessage) GetType() eventType { return eventNewUserMessage }
 
+// NewEventNewUserMessage creates a new EventNewUserMessage
+func NewEventNewUserMessage(content string) EventNewUserMessage {
+	return EventNewUserMessage{EventBase: EventBase{Content: content}}
+}
+
 // EventNewAssistantMessage represents a new assistant message event
 type EventNewAssistantMessage struct {
 	EventBase
 }
 
 func (e EventNewAssistantMessage) GetType() eventType { return eventNewAssistantMessage }
+
+// NewEventNewAssistantMessage creates a new EventNewAssistantMessage
+func NewEventNewAssistantMessage(content string) EventNewAssistantMessage {
+	return EventNewAssistantMessage{EventBase: EventBase{Content: content}}
+}
 
 // EventNewSystemMessage represents a new system message event
 type EventNewSystemMessage struct {
@@ -72,6 +97,11 @@ type EventNewSystemMessage struct {
 
 func (e EventNewSystemMessage) GetType() eventType { return eventNewSystemMessage }
 
+// NewEventNewSystemMessage creates a new EventNewSystemMessage
+func NewEventNewSystemMessage(content string) EventNewSystemMessage {
+	return EventNewSystemMessage{EventBase: EventBase{Content: content}}
+}
+
 // EventNewToolMessage represents a new tool message event
 type EventNewToolMessage struct {
 	EventBase
@@ -79,12 +109,22 @@ type EventNewToolMessage struct {
 
 func (e EventNewToolMessage) GetType() eventType { return eventNewToolMessage }
 
+// NewEventNewToolMessage creates a new EventNewToolMessage
+func NewEventNewToolMessage(content string) EventNewToolMessage {
+	return EventNewToolMessage{EventBase: EventBase{Content: content}}
+}
+
 // EventNewRefusal represents a new refusal event
 type EventNewRefusal struct {
 	EventBase
 }
 
 func (e EventNewRefusal) GetType() eventType { return eventNewRefusal }
+
+// NewEventNewRefusal creates a new EventNewRefusal
+func NewEventNewRefusal(content string) EventNewRefusal {
+	return EventNewRefusal{EventBase: EventBase{Content: content}}
+}
 
 // StreamEvent represents a stream event
 type StreamEvent interface {

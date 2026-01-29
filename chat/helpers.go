@@ -9,15 +9,15 @@ func (c *Chat) AddMessage(sender Sender, content string) error {
 
 	switch s := sender.(type) {
 	case SenderUser:
-		newEvent = EventNewUserMessage{EventBase: EventBase{Content: content}}
+		newEvent = NewEventNewUserMessage(content)
 	case SenderAssistant:
-		newEvent = EventNewAssistantMessage{EventBase: EventBase{Content: content}}
+		newEvent = NewEventNewAssistantMessage(content)
 	case SenderSystem:
-		newEvent = EventNewSystemMessage{EventBase: EventBase{Content: content}}
+		newEvent = NewEventNewSystemMessage(content)
 	case SenderTool:
-		newEvent = EventNewToolMessage{EventBase: EventBase{Content: content}}
+		newEvent = NewEventNewToolMessage(content)
 	case SenderToolCaller:
-		newEvent = EventNewToolCall{CallID: s.CallId, RawJSON: content}
+		newEvent = NewEventNewToolCall(s.CallId, content)
 	default:
 		return ErrUnsupportedSender
 	}
@@ -35,7 +35,7 @@ func (c *Chat) SendStream(ctx context.Context, client Client, sender Sender, con
 	err := c.AddMessage(sender, content)
 	if err != nil {
 		result := make(chan StreamEvent, 1)
-		result <- EventNewError{Error: err}
+		result <- NewEventNewError(err)
 		close(result)
 		return result
 	}

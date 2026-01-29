@@ -15,7 +15,7 @@ func (c *Chat) Complete(ctx context.Context, client Client) chan StreamEvent {
 		// text completion stream
 		stream := client.NewStreaming(ctx)
 		if stream == nil {
-			result <- EventNewError{Error: ErrNilStreaming}
+			result <- NewEventNewError(ErrNilStreaming)
 			return
 		}
 		defer stream.Close()
@@ -31,7 +31,7 @@ func (c *Chat) Complete(ctx context.Context, client Client) chan StreamEvent {
 		}
 
 		if err := stream.Err(); err != nil {
-			result <- EventNewError{Error: err}
+			result <- NewEventNewError(err)
 		}
 	}()
 
@@ -57,7 +57,7 @@ func (c *Chat) Session(ctx context.Context, client Client) chan StreamEvent {
 		// adding collected events to the chat (assistant's tokens and tool calls)
 		defer func() {
 			if stringBuilder.Len() != 0 {
-				c.AppendEvent(EventNewToken{EventBase: EventBase{Content: stringBuilder.String()}})
+				c.AppendEvent(NewEventNewToken(stringBuilder.String()))
 			}
 			for _, call := range toolCalls {
 				c.AppendEvent(call)

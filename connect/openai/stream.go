@@ -91,15 +91,15 @@ func (s *OpenAIStream) _handleRawChunk(chunk openai.ChatCompletionChunk) ([]chat
 	tools := delta.ToolCalls
 
 	if content != "" {
-		result = append(result, chat.EventNewToken{EventBase: chat.EventBase{Content: content}})
+		result = append(result, chat.NewEventNewToken(content))
 	}
 
 	if refusal != "" {
-		result = append(result, chat.EventNewRefusal{EventBase: chat.EventBase{Content: content}})
+		result = append(result, chat.NewEventNewRefusal(refusal))
 	}
 
 	for _, tool := range tools {
-		result = append(result, chat.EventNewToolCall{CallID: tool.ID, RawJSON: tool.RawJSON()}) // TODO: improve ToolCall event data model
+		result = append(result, chat.NewEventNewToolCall(tool.ID, tool.RawJSON())) // TODO: improve ToolCall event data model
 	}
 
 	return result, nil
