@@ -15,9 +15,9 @@ func (c *Chat) AddMessage(sender Sender, content string) error {
 	case SenderSystem:
 		newEvent = NewEventNewSystemMessage(content)
 	case SenderTool:
-		newEvent = NewEventNewToolMessage(content)
+		newEvent = NewEventNewToolMessage(s.CallID, content)
 	case SenderToolCaller:
-		newEvent = NewEventNewToolCall(s.CallId, s.Name, content)
+		newEvent = NewEventNewToolCall(s.CallID, s.Name, content)
 	default:
 		return ErrUnsupportedSender
 	}
@@ -60,5 +60,5 @@ func (c *Chat) SendToolStream(ctx context.Context, client Client, content string
 }
 
 func (c *Chat) SendToolCallStream(ctx context.Context, client Client, callId string, content string) chan StreamEvent {
-	return c.SendStream(ctx, client, SenderToolCaller{CallId: callId}, content)
+	return c.SendStream(ctx, client, SenderToolCaller{CallID: callId}, content)
 }

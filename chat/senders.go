@@ -35,7 +35,9 @@ type SenderUser senderBase
 func (s SenderUser) GetType() senderType { return senderTypeUser }
 
 // SenderTool represents a tool sender
-type SenderTool senderBase
+type SenderTool struct {
+	CallID string
+}
 
 func (s SenderTool) GetType() senderType { return senderTypeTool }
 
@@ -43,7 +45,7 @@ func (s SenderTool) GetType() senderType { return senderTypeTool }
 type SenderToolCaller struct {
 	// Name is the name of the tool
 	Name   string
-	CallId string
+	CallID string
 }
 
 func (s SenderToolCaller) GetType() senderType { return senderTypeToolCaller }
