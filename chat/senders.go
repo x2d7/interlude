@@ -41,6 +41,8 @@ func (s SenderTool) GetType() senderType { return senderTypeTool }
 
 // SenderToolCall represents an assistant sender's tool call
 type SenderToolCaller struct {
+	// Name is the name of the tool
+	Name   string
 	CallId string
 }
 

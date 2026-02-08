@@ -17,7 +17,7 @@ func (c *Chat) AddMessage(sender Sender, content string) error {
 	case SenderTool:
 		newEvent = NewEventNewToolMessage(content)
 	case SenderToolCaller:
-		newEvent = NewEventNewToolCall(s.CallId, content)
+		newEvent = NewEventNewToolCall(s.CallId, s.Name, content)
 	default:
 		return ErrUnsupportedSender
 	}

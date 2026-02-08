@@ -23,6 +23,7 @@ const (
 )
 
 // TODO: Добавить в будущем возможность класть метадату в события (учет стоимости, айди генерации)
+// TODO: Добавить возмжность добавлять Name к событиям
 
 // EventBase is a base type for simple event types
 type EventBase struct {
@@ -30,16 +31,20 @@ type EventBase struct {
 }
 
 // EventNewToolCall represents a new tool call event
+// EventBase.Content contains raw JSON arguments of the call
 type EventNewToolCall struct {
 	EventBase
+	// CallId is the ID of the tool call request
 	CallID string
+	// Name is the name of the tool that was called
+	Name string
 }
 
 func (e EventNewToolCall) GetType() eventType { return eventNewToolCall }
 
 // NewEventNewToolCall creates a new EventNewToolCall
-func NewEventNewToolCall(callID, rawJSON string) EventNewToolCall {
-	return EventNewToolCall{EventBase: EventBase{Content: rawJSON}, CallID: callID}
+func NewEventNewToolCall(callID, name string, arguments string) EventNewToolCall {
+	return EventNewToolCall{EventBase: EventBase{Content: arguments}, CallID: callID, Name: name}
 }
 
 // EventNewError represents a new error event
@@ -105,6 +110,8 @@ func NewEventNewSystemMessage(content string) EventNewSystemMessage {
 // EventNewToolMessage represents a new tool message event
 type EventNewToolMessage struct {
 	EventBase
+	// CallID is the ID of the tool call request that was previously sent by assistant
+	CallID string
 }
 
 func (e EventNewToolMessage) GetType() eventType { return eventNewToolMessage }

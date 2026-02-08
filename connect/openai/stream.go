@@ -99,7 +99,9 @@ func (s *OpenAIStream) _handleRawChunk(chunk openai.ChatCompletionChunk) ([]chat
 	}
 
 	for _, tool := range tools {
-		result = append(result, chat.NewEventNewToolCall(tool.ID, tool.RawJSON())) // TODO: improve ToolCall event data model
+		name := tool.Function.Name
+		arguments := tool.Function.Arguments
+		result = append(result, chat.NewEventNewToolCall(tool.ID, name, arguments))
 	}
 
 	return result, nil
