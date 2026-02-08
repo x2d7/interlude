@@ -126,22 +126,23 @@ func isEmpty(m openai.ChatCompletionMessageParamUnion) bool {
 		m.OfFunction == nil
 }
 
-func ConvertTools(t tools.Tools) []openai.ChatCompletionToolUnionParam {
-	out := make([]openai.ChatCompletionToolUnionParam, 0, len(t))
-	for _, tool := range t {
-		if tool.Schema == nil {
-			out = append(out, openai.ChatCompletionFunctionTool(openai.FunctionDefinitionParam{
-				Name:        tool.Name,
-				Description: openai.String(tool.Description),
-			}))
-			continue
-		}
-		out = append(out, openai.ChatCompletionFunctionTool(openai.FunctionDefinitionParam{
+func ConvertTools(t *tools.Tools) []openai.ChatCompletionToolUnionParam {
+	list := t.Snapshot()
+
+	out := make([]openai.ChatCompletionToolUnionParam, 0, len(list))
+	for _, tool := range list {
+		def := openai.FunctionDefinitionParam{
 			Name:        tool.Name,
 			Description: openai.String(tool.Description),
-			Parameters:  openai.FunctionParameters(tool.Schema),
-		}))
+		}
+
+		if tool.Schema != nil {
+			def.Parameters = openai.FunctionParameters(tool.Schema)
+		}
+
+		out = append(out, openai.ChatCompletionFunctionTool(def))
 	}
+
 	return out
 }
 

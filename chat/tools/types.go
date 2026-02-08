@@ -1,8 +1,14 @@
 package tools
 
-import "reflect"
+import (
+	"reflect"
+	"sync"
+)
 
-type Tools []Tool
+type Tools struct {
+	mu   sync.RWMutex
+	list []Tool
+}
 
 type Tool struct {
 	Name        string
@@ -14,3 +20,21 @@ type Tool struct {
 }
 
 type ToolFunction func(input any) (string, error)
+
+func NewTools() Tools { return Tools{} }
+
+func (t *Tools) Add(tool Tool) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	t.list = append(t.list, tool)
+}
+
+func (t *Tools) Snapshot() []Tool {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+
+	out := make([]Tool, len(t.list))
+	copy(out, t.list)
+	return out
+}

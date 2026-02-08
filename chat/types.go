@@ -10,7 +10,7 @@ import (
 // Chat is a struct that contains messages and tools for text completion
 type Chat struct {
 	Messages *Messages
-	Tools    tools.Tools
+	Tools    *tools.Tools
 }
 
 // Client interface represents the LLM connector client
