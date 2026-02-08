@@ -7,17 +7,13 @@ import (
 func (c *Chat) AddMessage(sender Sender, content string) error {
 	var newEvent StreamEvent
 
-	switch s := sender.(type) {
+	switch sender.(type) {
 	case SenderUser:
 		newEvent = NewEventNewUserMessage(content)
 	case SenderAssistant:
 		newEvent = NewEventNewAssistantMessage(content)
 	case SenderSystem:
 		newEvent = NewEventNewSystemMessage(content)
-	case SenderTool:
-		newEvent = NewEventNewToolMessage(s.CallID, content)
-	case SenderToolCaller:
-		newEvent = NewEventNewToolCall(s.CallID, s.Name, content)
 	default:
 		return ErrUnsupportedSender
 	}
@@ -53,12 +49,4 @@ func (c *Chat) SendAssistantStream(ctx context.Context, client Client, content s
 
 func (c *Chat) SendSystemStream(ctx context.Context, client Client, content string) <-chan StreamEvent {
 	return c.SendStream(ctx, client, SenderSystem{}, content)
-}
-
-func (c *Chat) SendToolStream(ctx context.Context, client Client, content string) <-chan StreamEvent {
-	return c.SendStream(ctx, client, SenderTool{}, content)
-}
-
-func (c *Chat) SendToolCallStream(ctx context.Context, client Client, callId string, content string) <-chan StreamEvent {
-	return c.SendStream(ctx, client, SenderToolCaller{CallID: callId}, content)
 }

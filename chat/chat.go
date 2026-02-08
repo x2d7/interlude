@@ -87,10 +87,10 @@ func (c *Chat) Session(ctx context.Context, client Client) <-chan StreamEvent {
 						call := verdict.call
 
 						if verdict.Accepted {
-							callResult, _ := c.Tools.Execute(call.Name, call.Content, call.CallID)
-							c.AppendEvent(NewEventNewToolMessage(call.CallID, callResult))
+							callResult, success := c.Tools.Execute(call.Name, call.Content, call.CallID)
+							c.AppendEvent(NewEventNewToolMessage(call.CallID, callResult, success))
 						} else {
-							c.AppendEvent(NewEventNewToolMessage(call.CallID, "User declined the tool call"))
+							c.AppendEvent(NewEventNewToolMessage(call.CallID, "User declined the tool call", false))
 						}
 					}
 

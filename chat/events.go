@@ -131,14 +131,15 @@ func NewEventNewSystemMessage(content string) EventNewSystemMessage {
 type EventNewToolMessage struct {
 	EventBase
 	// CallID is the ID of the tool call request that was previously sent by assistant
-	CallID string
+	CallID  string
+	Success bool
 }
 
 func (e EventNewToolMessage) GetType() eventType { return eventNewToolMessage }
 
 // NewEventNewToolMessage creates a new EventNewToolMessage
-func NewEventNewToolMessage(callId, content string) EventNewToolMessage {
-	return EventNewToolMessage{EventBase: EventBase{Content: content}, CallID: callId}
+func NewEventNewToolMessage(callId, content string, success bool) EventNewToolMessage {
+	return EventNewToolMessage{EventBase: EventBase{Content: content}, CallID: callId, Success: success}
 }
 
 // EventNewRefusal represents a new refusal event
