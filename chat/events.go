@@ -39,14 +39,25 @@ func NewEventCompletionEnded() EventCompletionEnded {
 	return EventCompletionEnded{}
 }
 
-// EventNewToolCall represents a new tool call event
-// EventBase.Content contains raw JSON arguments of the call
 type EventNewToolCall struct {
 	EventBase
-	// CallId is the ID of the tool call request
 	CallID string
-	// Name is the name of the tool that was called
-	Name string
+	Name   string
+
+	approval *ApproveWaiter
+	answered bool
+}
+
+func (e *EventNewToolCall) Resolve(accept bool) {
+	if e.answered {
+		return
+	}
+	e.answered = true
+	if e.approval == nil {
+		return
+	}
+	verdict := Verdict{Accepted: accept, call: *e}
+	e.approval.Resolve(verdict)
 }
 
 func (e EventNewToolCall) GetType() eventType { return eventNewToolCall }
@@ -126,8 +137,8 @@ type EventNewToolMessage struct {
 func (e EventNewToolMessage) GetType() eventType { return eventNewToolMessage }
 
 // NewEventNewToolMessage creates a new EventNewToolMessage
-func NewEventNewToolMessage(content string) EventNewToolMessage {
-	return EventNewToolMessage{EventBase: EventBase{Content: content}}
+func NewEventNewToolMessage(callId, content string) EventNewToolMessage {
+	return EventNewToolMessage{EventBase: EventBase{Content: content}, CallID: callId}
 }
 
 // EventNewRefusal represents a new refusal event

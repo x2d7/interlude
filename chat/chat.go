@@ -54,16 +54,14 @@ func (c *Chat) Session(ctx context.Context, client Client) chan StreamEvent {
 		var stringBuilder strings.Builder
 		toolCalls := make([]EventNewToolCall, 0)
 
+		approval := NewApproveWaiter()
+
 		for {
 			select {
 			case <-ctx.Done():
 				return
 			case ev, ok := <-events:
-				// closing the result channel if the events channel is closed
-				// TODO: in future expected behavior will different: result channel will be closed if all tool calls are processed and text completion is done
 				if !ok {
-					result <- NewEventCompletionEnded()
-
 					// adding collected events to the chat (assistant's tokens and tool calls)
 					if stringBuilder.Len() != 0 {
 						c.AppendEvent(NewEventNewToken(stringBuilder.String()))
@@ -72,21 +70,61 @@ func (c *Chat) Session(ctx context.Context, client Client) chan StreamEvent {
 						c.AppendEvent(call)
 					}
 
+					callAmount := len(toolCalls)
+
+					// ending current completion
+					result <- NewEventCompletionEnded()
+
+					if callAmount == 0 {
+						return
+					}
+
+					// initializing approval waiter
+					verdicts := approval.Wait(ctx, callAmount)
+
+					// processing user verdicts
+					for verdict := range verdicts {
+						call := verdict.call
+
+						if verdict.Accepted {
+							callResult, _ := c.Tools.Execute(call.Name, call.Content, call.CallID)
+							c.AppendEvent(NewEventNewToolMessage(call.CallID, callResult))
+						} else {
+							c.AppendEvent(NewEventNewToolMessage(call.CallID, "User declined the tool call"))
+						}
+					}
+
 					// reset collectors
 					stringBuilder.Reset()
 					toolCalls = make([]EventNewToolCall, 0)
 
-					return
+					// reset approval waiter
+					approval = NewApproveWaiter()
+
+					// resume text completion
+					client = client.SyncInput(c)
+					events = c.Complete(ctx, client)
+					continue
 				}
+
+				// in case of ev changes inside "collecting events" block
+				var modifiedEvent StreamEvent
 
 				// collecting events
 				switch event := ev.(type) {
 				case EventNewToken:
 					stringBuilder.WriteString(event.Content)
 				case EventNewToolCall:
+					approval.Attach(&event)
+					modifiedEvent = event
 					toolCalls = append(toolCalls, event)
 				case EventNewRefusal:
 					c.AppendEvent(event)
+				}
+
+				// modifying event
+				if modifiedEvent != nil {
+					ev = modifiedEvent
 				}
 
 				// sending events to the channel

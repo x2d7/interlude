@@ -56,3 +56,69 @@ type Stream[T any] interface {
 	Err() error   // non-nil if the stream ended because of an error
 	Close() error // release resources, ensure Next() returns false
 }
+
+type Verdict struct {
+	Accepted bool
+	call     EventNewToolCall
+}
+
+type ApproveWaiter struct {
+	verdicts chan Verdict
+}
+
+func NewApproveWaiter() *ApproveWaiter {
+	return &ApproveWaiter{
+		verdicts: make(chan Verdict),
+	}
+}
+
+// Attach wires the event to the waiter
+// Call this on the local `event` value before appending it to toolCalls.
+func (a *ApproveWaiter) Attach(e *EventNewToolCall) {
+	e.approval = a
+}
+
+// Wait returns a channel that will deliver exactly `amount` verdicts (or close early on ctx cancel).
+func (a *ApproveWaiter) Wait(ctx context.Context, amount int) chan Verdict {
+	out := make(chan Verdict)
+	if amount <= 0 {
+		close(out)
+		return out
+	}
+
+	go func() {
+		defer func() {
+			close(out)
+		}()
+
+		collected := 0
+		for collected < amount {
+			select {
+			case <-ctx.Done():
+				return
+			case v, ok := <-a.verdicts:
+				if !ok {
+					return
+				}
+				select {
+				case out <- v:
+					collected++
+				case <-ctx.Done():
+					return
+				}
+			}
+		}
+
+	}()
+
+	return out
+}
+
+// Resolve allows programmatic submission of a verdict.
+func (a *ApproveWaiter) Resolve(verdict Verdict) {
+	select {
+	case a.verdicts <- verdict:
+	default:
+		go func() { a.verdicts <- verdict }()
+	}
+}
