@@ -15,7 +15,7 @@ type OpenAIClient struct {
 	APIKey   string
 	// Model ID used to generate the response, like `gpt-4o` or `o3`
 	// Overrides the Params.Model if set
-	Model    string
+	Model string
 
 	// Params used to generate the response
 	Params openai.ChatCompletionNewParams
