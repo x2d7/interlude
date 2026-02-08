@@ -42,7 +42,6 @@ func (c *OpenAIClient) SyncInput(chat *chat.Chat) chat.Client {
 
 	newClient.Params.Messages = messages
 
-	// TODO: copy tools
 	tools := ConvertTools(chat.Tools)
 	newClient.Params.Tools = tools
 
