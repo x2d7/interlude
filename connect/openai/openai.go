@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/x2d7/interlude/chat"
+	"github.com/x2d7/interlude/chat/tools"
 
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/option"
@@ -42,7 +43,8 @@ func (c *OpenAIClient) SyncInput(chat *chat.Chat) chat.Client {
 	newClient.Params.Messages = messages
 
 	// TODO: copy tools
-
+	tools := ConvertTools(chat.Tools)
+	newClient.Params.Tools = tools
 
 	return &newClient
 }
@@ -115,6 +117,25 @@ func isEmpty(m openai.ChatCompletionMessageParamUnion) bool {
 		m.OfAssistant == nil &&
 		m.OfTool == nil &&
 		m.OfFunction == nil
+}
+
+func ConvertTools(t tools.Tools) []openai.ChatCompletionToolUnionParam {
+	out := make([]openai.ChatCompletionToolUnionParam, 0, len(t))
+	for _, tool := range t {
+		if tool.Schema == nil {
+			out = append(out, openai.ChatCompletionFunctionTool(openai.FunctionDefinitionParam{
+				Name:        tool.Name,
+				Description: openai.String(tool.Description),
+			}))
+			continue
+		}
+		out = append(out, openai.ChatCompletionFunctionTool(openai.FunctionDefinitionParam{
+			Name:        tool.Name,
+			Description: openai.String(tool.Description),
+			Parameters:  openai.FunctionParameters(tool.Schema),
+		}))
+	}
+	return out
 }
 
 func getClient(c *OpenAIClient) *openai.Client {
