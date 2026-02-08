@@ -41,6 +41,15 @@ func (m *Messages) AddEvent(event StreamEvent) {
 	m.Events = append(m.Events, event)
 }
 
+func (m *Messages) Snapshot() []StreamEvent {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	cp := make([]StreamEvent, len(m.Events))
+	copy(cp, m.Events)
+	return cp
+}
+
 type Stream[T any] interface {
 	Next() bool   // advance; returns false on EOF or error
 	Current() T   // the current element; valid only if Last Next() returned true

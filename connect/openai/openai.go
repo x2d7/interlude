@@ -30,10 +30,91 @@ func (c *OpenAIClient) NewStreaming(ctx context.Context) chat.Stream[chat.Stream
 	return stream
 }
 
-// TODO: implement input configuration syncronization for OpenAI client
 func (c *OpenAIClient) SyncInput(chat *chat.Chat) chat.Client {
 	newClient := *c
+
+	// copy messages
+	messages := make(openAIMessages, 0)
+	for _, m := range chat.Messages.Snapshot() {
+		messages.Add(m)
+	}
+
+	newClient.Params.Messages = messages
+
+	// TODO: copy tools
+
+
 	return &newClient
+}
+
+type openAIMessages []openai.ChatCompletionMessageParamUnion
+
+func (m *openAIMessages) findLastAssistantMessage() *openai.ChatCompletionMessageParamUnion {
+	for i := len(*m) - 1; i >= 0; i-- {
+		if (*m)[i].OfAssistant != nil {
+			return &(*m)[i]
+		}
+	}
+	return nil
+}
+
+func (m *openAIMessages) Add(event chat.StreamEvent) {
+	var message openai.ChatCompletionMessageParamUnion
+
+	switch e := event.(type) {
+	case chat.EventNewAssistantMessage:
+		message = openai.AssistantMessage(e.Content)
+	case chat.EventNewRefusal:
+		refusal := openai.ChatCompletionContentPartRefusalParam{Refusal: e.Content}
+		contentUnion := make([]openai.ChatCompletionAssistantMessageParamContentArrayOfContentPartUnion, 0)
+		contentUnion = append(contentUnion,
+			openai.ChatCompletionAssistantMessageParamContentArrayOfContentPartUnion{OfRefusal: &refusal},
+		)
+		message = openai.AssistantMessage(contentUnion)
+	case chat.EventNewSystemMessage:
+		message = openai.SystemMessage(e.Content)
+	case chat.EventNewUserMessage:
+		message = openai.UserMessage(e.Content)
+	case chat.EventNewToolCall:
+		messagePtr := m.findLastAssistantMessage()
+		if messagePtr == nil {
+			message = openai.AssistantMessage(" ")
+			messagePtr = &message
+		}
+
+		toolCalls := make([]openai.ChatCompletionMessageToolCallUnionParam, 0)
+		functionCall := openai.ChatCompletionMessageFunctionToolCallParam{
+			ID: e.CallID,
+			Function: openai.ChatCompletionMessageFunctionToolCallFunctionParam{
+				Name:      e.Name,
+				Arguments: e.Content,
+			},
+		}
+		toolCalls = append(toolCalls, openai.ChatCompletionMessageToolCallUnionParam{
+			OfFunction: &functionCall,
+		})
+		if messagePtr.OfAssistant.ToolCalls == nil {
+			messagePtr.OfAssistant.ToolCalls = make([]openai.ChatCompletionMessageToolCallUnionParam, 0)
+		}
+		messagePtr.OfAssistant.ToolCalls = append(messagePtr.OfAssistant.ToolCalls, toolCalls...)
+
+	case chat.EventNewToolMessage:
+		message = openai.ToolMessage(e.Content, e.CallID)
+	}
+
+	if !isEmpty(message) {
+		*m = append(*m, message)
+	}
+
+}
+
+func isEmpty(m openai.ChatCompletionMessageParamUnion) bool {
+	return m.OfDeveloper == nil &&
+		m.OfSystem == nil &&
+		m.OfUser == nil &&
+		m.OfAssistant == nil &&
+		m.OfTool == nil &&
+		m.OfFunction == nil
 }
 
 func getClient(c *OpenAIClient) *openai.Client {
