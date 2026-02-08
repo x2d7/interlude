@@ -40,7 +40,7 @@ func (c *Chat) Complete(ctx context.Context, client Client) chan StreamEvent {
 
 func (c *Chat) Session(ctx context.Context, client Client) chan StreamEvent {
 	// insert chat context into client input configuration
-	client.SyncInput(c)
+	client = client.SyncInput(c)
 
 	// creating the channels
 	result := make(chan StreamEvent, 16)
