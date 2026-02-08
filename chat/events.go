@@ -9,6 +9,7 @@ const (
 	eventNewToken eventType = iota
 	eventNewToolCall
 	eventNewRefusal
+	eventCompletionEnded
 
 	// events produced by consumer
 
@@ -28,6 +29,14 @@ const (
 // EventBase is a base type for simple event types
 type EventBase struct {
 	Content string
+}
+
+type EventCompletionEnded struct{}
+
+func (e EventCompletionEnded) GetType() eventType { return eventCompletionEnded }
+
+func NewEventCompletionEnded() EventCompletionEnded {
+	return EventCompletionEnded{}
 }
 
 // EventNewToolCall represents a new tool call event

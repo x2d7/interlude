@@ -54,16 +54,6 @@ func (c *Chat) Session(ctx context.Context, client Client) chan StreamEvent {
 		var stringBuilder strings.Builder
 		toolCalls := make([]EventNewToolCall, 0)
 
-		// adding collected events to the chat (assistant's tokens and tool calls)
-		defer func() {
-			if stringBuilder.Len() != 0 {
-				c.AppendEvent(NewEventNewToken(stringBuilder.String()))
-			}
-			for _, call := range toolCalls {
-				c.AppendEvent(call)
-			}
-		}()
-
 		for {
 			select {
 			case <-ctx.Done():
@@ -72,6 +62,20 @@ func (c *Chat) Session(ctx context.Context, client Client) chan StreamEvent {
 				// closing the result channel if the events channel is closed
 				// TODO: in future expected behavior will different: result channel will be closed if all tool calls are processed and text completion is done
 				if !ok {
+					result <- NewEventCompletionEnded()
+
+					// adding collected events to the chat (assistant's tokens and tool calls)
+					if stringBuilder.Len() != 0 {
+						c.AppendEvent(NewEventNewToken(stringBuilder.String()))
+					}
+					for _, call := range toolCalls {
+						c.AppendEvent(call)
+					}
+
+					// reset collectors
+					stringBuilder.Reset()
+					toolCalls = make([]EventNewToolCall, 0)
+
 					return
 				}
 
