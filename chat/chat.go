@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-func (c *Chat) Complete(ctx context.Context, client Client) chan StreamEvent {
+func (c *Chat) Complete(ctx context.Context, client Client) <-chan StreamEvent {
 	result := make(chan StreamEvent, 16)
 
 	// sending events to the channel in background
@@ -38,7 +38,7 @@ func (c *Chat) Complete(ctx context.Context, client Client) chan StreamEvent {
 	return result
 }
 
-func (c *Chat) Session(ctx context.Context, client Client) chan StreamEvent {
+func (c *Chat) Session(ctx context.Context, client Client) <-chan StreamEvent {
 	// insert chat context into client input configuration
 	client = client.SyncInput(c)
 
