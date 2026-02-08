@@ -13,7 +13,11 @@ import (
 type OpenAIClient struct {
 	Endpoint string
 	APIKey   string
+	// Model ID used to generate the response, like `gpt-4o` or `o3`
+	// Overrides the Params.Model if set
+	Model    string
 
+	// Params used to generate the response
 	Params openai.ChatCompletionNewParams
 
 	RequestOptions []option.RequestOption
@@ -26,6 +30,10 @@ func (c *OpenAIClient) NewStreaming(ctx context.Context) chat.Stream[chat.Stream
 
 	client := getClient(c)
 	params := c.Params
+
+	if c.Model != "" {
+		params.Model = c.Model
+	}
 
 	stream.SSEStream = client.Chat.Completions.NewStreaming(ctx, params)
 	return stream
