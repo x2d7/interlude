@@ -18,7 +18,7 @@ type Tool struct {
 	Schema      map[string]any
 }
 
-type ToolFunction func(input any) (string, error)
+type ToolFunction func(input string) (string, error)
 
 func NewTools() Tools { return Tools{} }
 

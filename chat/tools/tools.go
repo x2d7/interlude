@@ -19,16 +19,8 @@ func NewTool[T any](name, description string, f func(T) (string, error)) Tool {
 	var schemaMap map[string]any
 	_ = json.Unmarshal(b, &schemaMap)
 
-	wrapper := func(input any) (string, error) {
-		var raw []byte
-		switch v := input.(type) {
-		case string:
-			raw = []byte(v)
-		case []byte:
-			raw = v
-		default:
-			return "", fmt.Errorf("tool %q expects a JSON string or []byte", name)
-		}
+	wrapper := func(input string) (string, error) {
+		raw := []byte(input)
 
 		var parsed T
 		if err := json.Unmarshal(raw, &parsed); err != nil {
