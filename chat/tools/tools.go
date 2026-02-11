@@ -45,7 +45,7 @@ func NewTool[T any](name, description string, f func(T) (string, error)) Tool {
 	}
 }
 
-func (t *Tools) Execute(name string, arguments any, callID string) (result string, ok bool) {
+func (t *Tools) Execute(name string, arguments string) (result string, ok bool) {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 
