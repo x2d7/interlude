@@ -1,7 +1,6 @@
 package tools
 
 import (
-	"reflect"
 	"sync"
 )
 
@@ -14,9 +13,7 @@ type Tool struct {
 	Name        string
 	Description string
 	Func        ToolFunction
-
-	InputType reflect.Type
-	Schema    map[string]any
+	Schema      map[string]any
 }
 
 type ToolFunction func(input any) (string, error)

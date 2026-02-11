@@ -39,7 +39,6 @@ func NewTool[T any](name, description string, f func(T) (string, error)) Tool {
 		Name:        name,
 		Description: description,
 		Func:        wrapper,
-		InputType:   inputType,
 		Schema:      schemaMap,
 	}
 }
