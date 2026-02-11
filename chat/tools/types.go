@@ -20,6 +20,8 @@ type ToolFunction func(input any) (string, error)
 
 func NewTools() Tools { return Tools{} }
 
+// TODO: Переработка Tools - добавление и удаление по ID инструмента, получение списка инструментов (локальные Name)
+
 func (t *Tools) Add(tool Tool) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
