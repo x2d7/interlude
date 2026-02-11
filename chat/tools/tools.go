@@ -8,6 +8,8 @@ import (
 	"github.com/invopop/jsonschema"
 )
 
+// TODO: Поддержка более простых тулов, которые принимают на вход примитивные типы (учитывать сигнатуру)
+
 func NewTool[T any](name, description string, f func(T) (string, error)) Tool {
 	inputType := reflect.TypeFor[T]()
 

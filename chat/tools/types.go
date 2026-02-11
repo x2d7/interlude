@@ -9,6 +9,8 @@ type Tools struct {
 	list []Tool
 }
 
+// TODO: Не экспортировать Schema, сделать GetSchema.
+
 type Tool struct {
 	Name        string
 	Description string
