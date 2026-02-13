@@ -30,6 +30,6 @@ func (t *tool) GetSchema() (map[string]any, error) {
 
 // TODO: Поддержка более простых тулов, которые принимают на вход примитивные типы (учитывать сигнатуру)
 
-func GetInputStructType[T any]() reflect.Type {
+func getInputStructType[T any]() reflect.Type {
 	return reflect.TypeFor[T]()
 }

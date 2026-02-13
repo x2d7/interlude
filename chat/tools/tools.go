@@ -6,7 +6,7 @@ import (
 )
 
 func NewTool[T any](name, description string, f func(T) (string, error)) (tool, error) {
-	inputType := GetInputStructType[T]()
+	inputType := getInputStructType[T]()
 
 	wrapper := func(input string) (string, error) {
 		raw := []byte(input)
