@@ -12,7 +12,7 @@ type tool struct {
 	Name        string
 	Description string
 
-	function  ToolFunction
+	function  toolFunction
 	inputType reflect.Type
 	schema    map[string]any
 }
@@ -38,7 +38,7 @@ func (t *tool) GetSchema() (map[string]any, error) {
 	return schemaMap, nil
 }
 
-type ToolFunction func(input string) (string, error)
+type toolFunction func(input string) (string, error)
 
 type Tools struct {
 	mu   sync.RWMutex
