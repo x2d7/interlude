@@ -19,7 +19,7 @@ func NewTool[T any](name, description string, f func(T) (string, error)) (tool, 
 	}
 
 	t := tool{
-		Name:        name,
+		Id:        name,
 		Description: description,
 		function:    wrapper,
 
@@ -37,7 +37,7 @@ func NewTool[T any](name, description string, f func(T) (string, error)) (tool, 
 
 func (t *Tools) Execute(name string, arguments string) (result string, ok bool) {
 	for _, tool := range t.Snapshot() {
-		if tool.Name != name {
+		if tool.Id != name {
 			continue
 		}
 

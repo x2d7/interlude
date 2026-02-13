@@ -6,7 +6,7 @@ import (
 )
 
 type tool struct {
-	Name        string
+	Id        string
 	Description string
 
 	function  toolFunction
@@ -31,11 +31,11 @@ func (t *Tools) Add(tool tool) (added bool) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
-	_, ok := t.tools[tool.Name]
+	_, ok := t.tools[tool.Id]
 	if ok {
 		return false
 	}
-	t.tools[tool.Name] = tool
+	t.tools[tool.Id] = tool
 	return true
 }
 
