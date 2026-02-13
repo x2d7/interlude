@@ -56,7 +56,8 @@ func (t *Tools) Snapshot() []tool {
 	defer t.mu.RUnlock()
 
 	out := make([]tool, 0, len(t.tools))
-	for _, tool := range t.tools {
+	for id, tool := range t.tools {
+		tool.Id = id
 		out = append(out, tool)
 	}
 
