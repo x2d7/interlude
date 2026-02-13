@@ -44,12 +44,13 @@ func (t *Tools) Add(tool tool, opts ...AddOption) (added bool) {
 
 	if config.autoIncrement {
 		id = nextID(t.tools, id, config)
+	} else {
+		_, ok := t.tools[id]
+		if ok {
+			return false
+		}
 	}
 
-	_, ok := t.tools[id]
-	if ok {
-		return false
-	}
 	t.tools[id] = tool
 	return true
 }
