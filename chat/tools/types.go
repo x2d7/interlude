@@ -1,12 +1,13 @@
 package tools
 
 import (
+	"fmt"
 	"reflect"
 	"sync"
 )
 
 type tool struct {
-	Id        string
+	Id          string
 	Description string
 
 	function  toolFunction
@@ -27,16 +28,38 @@ func NewTools() Tools {
 	}
 }
 
-func (t *Tools) Add(tool tool) (added bool) {
+func (t *Tools) Add(tool tool, opts ...AddOption) (added bool) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
-	_, ok := t.tools[tool.Id]
+	config := &toolAddConfig{}
+	for _, opt := range opts {
+		opt(config)
+	}
+
+	id := tool.Id
+	if config.overrideName != "" {
+		id = config.overrideName
+	}
+
+	if config.autoIncrement {
+		id = nextID(t.tools, id, config)
+	}
+
+	_, ok := t.tools[id]
 	if ok {
 		return false
 	}
-	t.tools[tool.Id] = tool
+	t.tools[id] = tool
 	return true
+}
+
+func nextID(m map[string]tool, id string, config *toolAddConfig) string {
+	_, exists := m[id]
+	if !exists {
+		return id
+	}
+	return nextID(m, fmt.Sprintf("%s_%d", id, config.startIncrement+1), config)
 }
 
 func (t *Tools) Remove(name string) (removed bool) {
