@@ -24,7 +24,7 @@ func NewTool[T any](name, description string, f func(T) (string, error)) (tool, 
 	t := tool{
 		Name:        name,
 		Description: description,
-		Func:        wrapper,
+		function:    wrapper,
 
 		inputType: inputType,
 	}
@@ -44,7 +44,7 @@ func (t *Tools) Execute(name string, arguments string) (result string, ok bool) 
 			continue
 		}
 
-		result, err := tool.Func(arguments)
+		result, err := tool.function(arguments)
 		if err != nil {
 			return err.Error(), false
 		}

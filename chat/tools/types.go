@@ -11,8 +11,8 @@ import (
 type tool struct {
 	Name        string
 	Description string
-	Func        ToolFunction
 
+	function  ToolFunction
 	inputType reflect.Type
 	schema    map[string]any
 }
