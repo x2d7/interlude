@@ -136,9 +136,9 @@ func ConvertTools(t *tools.Tools) []openai.ChatCompletionToolUnionParam {
 			Description: openai.String(tool.Description),
 		}
 
-		if tool.Schema != nil {
-			def.Parameters = openai.FunctionParameters(tool.Schema)
-		}
+		// creating a `tools.tool` object is impossible if tool.GetSchema returns an error, so we suppress the error
+		schema, _ := tool.GetSchema()
+		def.Parameters = openai.FunctionParameters(schema)
 
 		out = append(out, openai.ChatCompletionFunctionTool(def))
 	}
