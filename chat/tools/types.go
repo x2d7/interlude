@@ -45,7 +45,11 @@ type Tools struct {
 	tools map[string]tool
 }
 
-func NewTools() Tools { return Tools{} }
+func NewTools() Tools {
+	return Tools{
+		tools: make(map[string]tool),
+	}
+}
 
 func (t *Tools) Add(tool tool) (added bool) {
 	t.mu.Lock()
@@ -75,7 +79,7 @@ func (t *Tools) Snapshot() []tool {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 
-	out := make([]tool, len(t.tools))
+	out := make([]tool, 0, len(t.tools))
 	for _, tool := range t.tools {
 		out = append(out, tool)
 	}
