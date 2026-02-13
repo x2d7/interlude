@@ -19,7 +19,7 @@ func NewTool[T any](name, description string, f func(T) (string, error)) (tool, 
 	}
 
 	t := tool{
-		Id:        name,
+		Id:          name,
 		Description: description,
 		function:    wrapper,
 
