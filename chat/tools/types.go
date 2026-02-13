@@ -41,26 +41,44 @@ func (t *tool) GetSchema() (map[string]any, error) {
 type toolFunction func(input string) (string, error)
 
 type Tools struct {
-	mu   sync.RWMutex
-	list []tool
+	mu    sync.RWMutex
+	tools map[string]tool
 }
 
 func NewTools() Tools { return Tools{} }
 
-// TODO: Переработка Tools - добавление и удаление по ID инструмента, получение списка инструментов (локальные Name)
-
-func (t *Tools) Add(tool tool) {
+func (t *Tools) Add(tool tool) (added bool) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
-	t.list = append(t.list, tool)
+	_, ok := t.tools[tool.Name]
+	if ok {
+		return false
+	}
+	t.tools[tool.Name] = tool
+	return true
+}
+
+func (t *Tools) Remove(name string) (removed bool) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	_, ok := t.tools[name]
+	if !ok {
+		return false
+	}
+	delete(t.tools, name)
+	return true
 }
 
 func (t *Tools) Snapshot() []tool {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 
-	out := make([]tool, len(t.list))
-	copy(out, t.list)
+	out := make([]tool, len(t.tools))
+	for _, tool := range t.tools {
+		out = append(out, tool)
+	}
+
 	return out
 }
