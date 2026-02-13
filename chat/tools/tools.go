@@ -3,13 +3,10 @@ package tools
 import (
 	"encoding/json"
 	"fmt"
-	"reflect"
 )
 
-// TODO: Поддержка более простых тулов, которые принимают на вход примитивные типы (учитывать сигнатуру)
-
 func NewTool[T any](name, description string, f func(T) (string, error)) (tool, error) {
-	inputType := reflect.TypeFor[T]()
+	inputType := GetInputStructType[T]()
 
 	wrapper := func(input string) (string, error) {
 		raw := []byte(input)
