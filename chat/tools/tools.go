@@ -3,21 +3,10 @@ package tools
 import (
 	"encoding/json"
 	"fmt"
-	"reflect"
-
-	"github.com/invopop/jsonschema"
 )
 
-// TODO: Поддержка более простых тулов, которые принимают на вход примитивные типы (учитывать сигнатуру)
-
-func NewTool[T any](name, description string, f func(T) (string, error)) Tool {
-	inputType := reflect.TypeFor[T]()
-
-	ptr := reflect.New(inputType).Interface()
-	s := jsonschema.Reflect(ptr)
-	b, _ := json.Marshal(s)
-	var schemaMap map[string]any
-	_ = json.Unmarshal(b, &schemaMap)
+func NewTool[T any](name, description string, f func(T) (string, error)) (tool, error) {
+	inputType := ensureInputStructType[T]()
 
 	wrapper := func(input string) (string, error) {
 		raw := []byte(input)
@@ -29,21 +18,30 @@ func NewTool[T any](name, description string, f func(T) (string, error)) Tool {
 		return f(parsed)
 	}
 
-	return Tool{
-		Name:        name,
+	t := tool{
+		Id:          name,
 		Description: description,
-		Func:        wrapper,
-		Schema:      schemaMap,
+		function:    wrapper,
+
+		inputType: inputType,
 	}
+
+	schema, err := t.GetSchema()
+	if err != nil {
+		return tool{}, err
+	}
+	t.schema = schema
+
+	return t, nil
 }
 
 func (t *Tools) Execute(name string, arguments string) (result string, ok bool) {
 	for _, tool := range t.Snapshot() {
-		if tool.Name != name {
+		if tool.Id != name {
 			continue
 		}
 
-		result, err := tool.Func(arguments)
+		result, err := tool.function(arguments)
 		if err != nil {
 			return err.Error(), false
 		}

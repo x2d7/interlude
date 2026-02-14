@@ -1,41 +1,89 @@
 package tools
 
 import (
+	"fmt"
+	"reflect"
 	"sync"
 )
 
-type Tools struct {
-	mu   sync.RWMutex
-	list []Tool
-}
-
-// TODO: Не экспортировать Schema, сделать GetSchema.
-
-type Tool struct {
-	Name        string
+type tool struct {
+	Id          string
 	Description string
-	Func        ToolFunction
-	Schema      map[string]any
+
+	function  toolFunction
+	inputType reflect.Type
+	schema    map[string]any
 }
 
-type ToolFunction func(input string) (string, error)
+type toolFunction func(input string) (string, error)
 
-func NewTools() Tools { return Tools{} }
+type Tools struct {
+	mu    sync.RWMutex
+	tools map[string]tool
+}
 
-// TODO: Переработка Tools - добавление и удаление по ID инструмента, получение списка инструментов (локальные Name)
+func NewTools() Tools {
+	return Tools{
+		tools: make(map[string]tool),
+	}
+}
 
-func (t *Tools) Add(tool Tool) {
+func (t *Tools) Add(tool tool, opts ...AddOption) (added bool) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
-	t.list = append(t.list, tool)
+	config := &toolAddConfig{}
+	for _, opt := range opts {
+		opt(config)
+	}
+
+	id := tool.Id
+	if config.overrideName != "" {
+		id = config.overrideName
+	}
+
+	if config.autoIncrement {
+		id = nextID(t.tools, id, config)
+	} else {
+		_, ok := t.tools[id]
+		if ok {
+			return false
+		}
+	}
+
+	t.tools[id] = tool
+	return true
 }
 
-func (t *Tools) Snapshot() []Tool {
+func nextID(m map[string]tool, id string, config *toolAddConfig) string {
+	_, exists := m[id]
+	if !exists {
+		return id
+	}
+	return nextID(m, fmt.Sprintf("%s_%d", id, config.startIncrement+1), config)
+}
+
+func (t *Tools) Remove(name string) (removed bool) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	_, ok := t.tools[name]
+	if !ok {
+		return false
+	}
+	delete(t.tools, name)
+	return true
+}
+
+func (t *Tools) Snapshot() []tool {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 
-	out := make([]Tool, len(t.list))
-	copy(out, t.list)
+	out := make([]tool, 0, len(t.tools))
+	for id, tool := range t.tools {
+		tool.Id = id
+		out = append(out, tool)
+	}
+
 	return out
 }
