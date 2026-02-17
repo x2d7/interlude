@@ -24,7 +24,7 @@ jobs:
 
       - name: Ensure code is formatted
         run: |
-          unformatted=$(gofmt -s -l ./...)
+          unformatted=$(gofmt -s -l .)
           if [ -n "$unformatted" ]; then
             echo "Unformatted files:"
             echo "$unformatted"
