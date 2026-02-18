@@ -420,7 +420,7 @@ func TestApproveWaiter_Wait_CtxDoneDuringCollection(t *testing.T) {
 
 // TestApproveWaiter_Wait_InnerCtxDone tests ctx.Done() triggered inside the inner select
 // This covers: after receiving verdict from a.verdicts, ctx.Done() in inner select causes return
-func TestApproveWaiter_Wait_InnerCtxDone(t *testing.T) { 
+func TestApproveWaiter_Wait_InnerCtxDone(t *testing.T) {
 	w := NewApproveWaiter()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -442,17 +442,16 @@ func TestApproveWaiter_Wait_InnerCtxDone(t *testing.T) {
 		t.Fatal("timeout waiting for resolveSync to complete; worker didn't reach inner select")
 	}
 
-	// cancel context -> should cause worker to take ctx.Done() in inner select and finish
+	// cancel context -> races with out <- v in the worker's inner select
 	cancel()
 
-	// wait for verdicts channel to close (meaning worker returned)
+	// wait for verdicts channel to close (meaning worker returned).
+	// Both ok=true (verdict delivered) and ok=false (channel closed without verdict)
+	// are valid outcomes — we only assert that the worker does not hang.
 	select {
-	case v, ok := <-verdicts:
-		if ok {
-			t.Fatalf("expected verdicts channel to be closed without delivering verdict, got: %+v", v)
-		}
-		// closed as expected
+	case <-verdicts:
+		// either a verdict arrived or the channel was closed — worker finished either way
 	case <-time.After(500 * time.Millisecond):
-		t.Fatal("timeout waiting for verdicts channel to close after cancel")
+		t.Fatal("timeout waiting for worker to finish after cancel")
 	}
 }
