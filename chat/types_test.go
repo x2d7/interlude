@@ -4,6 +4,7 @@ import (
 	"context"
 	"sync"
 	"testing"
+	"time"
 )
 
 // ==================== Messages Tests ====================
@@ -347,20 +348,20 @@ func TestApproveWaiter_Resolve_Concurrent(t *testing.T) {
 func TestApproveWaiter_Wait_CtxDoneDuringCollection(t *testing.T) {
 	w := NewApproveWaiter()
 	ctx, cancel := context.WithCancel(context.Background())
-	
+
 	// Channel for communication between sender and reader goroutines
 	// sender -> ready to send next
 	// reader -> received verdict, can continue
 	ready := make(chan struct{})
-	
+
 	amount := 10
 	verdicts := w.Wait(ctx, amount)
-	
+
 	var (
 		received int
 		wg       sync.WaitGroup
 	)
-	
+
 	// Goroutine "Reader" - reads verdicts, decides whether to continue or cancel
 	wg.Add(1)
 	go func() {
@@ -373,13 +374,13 @@ func TestApproveWaiter_Wait_CtxDoneDuringCollection(t *testing.T) {
 					return
 				}
 				received++
-				
+
 				// If we received 3 verdicts, cancel context (ctx.Done() inside loop)
 				if received >= 3 {
 					cancel()
 					return
 				}
-				
+
 				// Otherwise, tell sender it can continue
 				select {
 				case ready <- struct{}{}:
@@ -391,14 +392,14 @@ func TestApproveWaiter_Wait_CtxDoneDuringCollection(t *testing.T) {
 			}
 		}
 	}()
-	
+
 	// Goroutine "Sender" - sends approvals, waits for ready signal
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
 		for i := 0; i < 5; i++ {
 			w.Resolve(Verdict{Accepted: true})
-			
+
 			select {
 			case <-ready:
 				// Can send next
@@ -407,12 +408,51 @@ func TestApproveWaiter_Wait_CtxDoneDuringCollection(t *testing.T) {
 			}
 		}
 	}()
-	
+
 	// Wait for both goroutines
 	wg.Wait()
-	
+
 	// Should have received exactly 3 verdicts before context cancellation
 	if received != 3 {
 		t.Fatalf("Expected exactly 3 verdicts, got %d", received)
+	}
+}
+
+// TestApproveWaiter_Wait_InnerCtxDone tests ctx.Done() triggered inside the inner select
+// This covers: after receiving verdict from a.verdicts, ctx.Done() in inner select causes return
+func TestApproveWaiter_Wait_InnerCtxDone(t *testing.T) { 
+	w := NewApproveWaiter()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	resolved := make(chan struct{})
+	verdicts := w.Wait(ctx, 1)
+
+	// start blocking resolveSync
+	go func() {
+		w.resolveSync(Verdict{Accepted: true})
+		close(resolved)
+	}()
+
+	// wait for resolveSync to complete (worker has read verdict and is now in inner select)
+	select {
+	case <-resolved:
+		// ok
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("timeout waiting for resolveSync to complete; worker didn't reach inner select")
+	}
+
+	// cancel context -> should cause worker to take ctx.Done() in inner select and finish
+	cancel()
+
+	// wait for verdicts channel to close (meaning worker returned)
+	select {
+	case v, ok := <-verdicts:
+		if ok {
+			t.Fatalf("expected verdicts channel to be closed without delivering verdict, got: %+v", v)
+		}
+		// closed as expected
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("timeout waiting for verdicts channel to close after cancel")
 	}
 }
