@@ -3,30 +3,13 @@ package tools
 import (
 	"encoding/json"
 	"fmt"
-	"reflect"
-
-	"github.com/invopop/jsonschema"
 )
 
-func NewTool[T any](name, description string, f func(T) (string, error)) Tool {
-	inputType := reflect.TypeFor[T]()
+func NewTool[T any](name, description string, f func(T) (string, error)) (tool, error) {
+	inputType := ensureInputStructType[T]()
 
-	ptr := reflect.New(inputType).Interface()
-	s := jsonschema.Reflect(ptr)
-	b, _ := json.Marshal(s)
-	var schemaMap map[string]any
-	_ = json.Unmarshal(b, &schemaMap)
-
-	wrapper := func(input any) (string, error) {
-		var raw []byte
-		switch v := input.(type) {
-		case string:
-			raw = []byte(v)
-		case []byte:
-			raw = v
-		default:
-			return "", fmt.Errorf("tool %q expects a JSON string or []byte", name)
-		}
+	wrapper := func(input string) (string, error) {
+		raw := []byte(input)
 
 		var parsed T
 		if err := json.Unmarshal(raw, &parsed); err != nil {
@@ -35,25 +18,30 @@ func NewTool[T any](name, description string, f func(T) (string, error)) Tool {
 		return f(parsed)
 	}
 
-	return Tool{
-		Name:        name,
+	t := tool{
+		Id:          name,
 		Description: description,
-		Func:        wrapper,
-		InputType:   inputType,
-		Schema:      schemaMap,
+		function:    wrapper,
+
+		inputType: inputType,
 	}
+
+	schema, err := t.GetSchema()
+	if err != nil {
+		return tool{}, err
+	}
+	t.schema = schema
+
+	return t, nil
 }
 
-func (t *Tools) Execute(name string, arguments any, callID string) (result string, ok bool) {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
-
-	for _, tool := range t.list {
-		if tool.Name != name {
+func (t *Tools) Execute(name string, arguments string) (result string, ok bool) {
+	for _, tool := range t.Snapshot() {
+		if tool.Id != name {
 			continue
 		}
 
-		result, err := tool.Func(arguments)
+		result, err := tool.function(arguments)
 		if err != nil {
 			return err.Error(), false
 		}
