@@ -107,6 +107,36 @@ func (c *MockClient) SetStreamingError(err error) {
 	c.StreamingError = err
 }
 
+// MultiRoundMockClient returns different events on each round
+type MultiRoundMockClient struct {
+	Rounds     [][]StreamEvent
+	roundIndex int
+	SyncedChat *Chat
+	mu         sync.Mutex
+}
+
+func NewMultiRoundMockClient(rounds [][]StreamEvent) *MultiRoundMockClient {
+	return &MultiRoundMockClient{Rounds: rounds}
+}
+
+func (c *MultiRoundMockClient) NewStreaming(ctx context.Context) Stream[StreamEvent] {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.roundIndex >= len(c.Rounds) {
+		return NewMockStream([]StreamEvent{NewEventCompletionEnded()}, nil)
+	}
+	events := c.Rounds[c.roundIndex]
+	c.roundIndex++
+	return NewMockStream(events, nil)
+}
+
+func (c *MultiRoundMockClient) SyncInput(chat *Chat) Client {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.SyncedChat = chat
+	return c
+}
+
 // ==================== Complete Tests ====================
 
 // TestComplete_SuccessTokens tests successful completion with tokens
@@ -401,39 +431,35 @@ func TestSession_CollectsTokens(t *testing.T) {
 	}
 }
 
-// TestSession_CollectsToolCalls tests that tool calls are added to history
+// TestSession_CollectsToolCalls
 func TestSession_CollectsToolCalls(t *testing.T) {
 	chat := &Chat{
 		Messages: NewMessages(),
 		Tools:    &tools.Tools{},
 	}
 
-	mockClient := NewMockClient()
-	mockClient.SetStreamingEvents([]StreamEvent{
-		NewEventNewToolCall("call-1", "tool1", `{}`),
-		NewEventCompletionEnded(),
+	// Round 1: one tool call + completion signal
+	// Round 2: just completion (session exits cleanly, no extra tool call)
+	mockClient := NewMultiRoundMockClient([][]StreamEvent{
+		{NewEventNewToolCall("call-1", "tool1", `{}`), NewEventCompletionEnded()},
+		{NewEventCompletionEnded()},
 	})
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx := context.Background()
 	events := chat.Session(ctx, mockClient)
 
-	// Need to handle tool call - resolve it to proceed
+	done := make(chan struct{})
 	go func() {
+		defer close(done)
 		for event := range events {
 			if tc, ok := event.(EventNewToolCall); ok {
-				// Resolve to allow completion
 				tc.Resolve(true)
 			}
 		}
 	}()
+	<-done
 
-	// Give time for processing
-	<-events
-	cancel()
-
-	// Check tool calls in history
 	messages := chat.Messages.Snapshot()
-
 	var toolCallCount int
 	for _, msg := range messages {
 		if msg.GetType() == eventNewToolCall {
@@ -535,43 +561,26 @@ func TestSession_ToolAccepted(t *testing.T) {
 	}
 	chat.Tools.Add(tool)
 
-	mockClient := NewMockClient()
-	mockClient.SetStreamingEvents([]StreamEvent{
-		NewEventNewToolCall("call-1", "test-tool", `{"key": "value"}`),
-		NewEventCompletionEnded(),
+	// Round 1: tool call, Round 2: empty completion to finish
+	mockClient := NewMultiRoundMockClient([][]StreamEvent{
+		{NewEventNewToolCall("call-1", "test-tool", `{"key": "value"}`), NewEventCompletionEnded()},
+		{NewEventCompletionEnded()},
 	})
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx := context.Background()
 	events := chat.Session(ctx, mockClient)
 
-	// Use channel for synchronization - signal when we receive tool call
-	toolCallReceived := make(chan struct{}, 1)
-	toolCallResolved := make(chan struct{}, 1)
-
-	// Process events and resolve tool call
+	done := make(chan struct{})
 	go func() {
+		defer close(done)
 		for event := range events {
 			if tc, ok := event.(EventNewToolCall); ok {
-				// Signal that we received the tool call
-				toolCallReceived <- struct{}{}
-				// Accept the tool call
 				tc.Resolve(true)
-				// Signal that we've resolved
-				toolCallResolved <- struct{}{}
 			}
 		}
 	}()
 
-	// Wait for tool call to be received
-	<-toolCallReceived
-
-	// Wait a bit for Session to set up the Wait() call
-	// Then wait for resolution
-	<-toolCallResolved
-
-	// Give time for the cycle to complete
-	<-events
-	cancel()
+	<-done
 
 	// Check that tool result was added to history
 	messages := chat.Messages.Snapshot()
@@ -608,33 +617,26 @@ func TestSession_ToolRejected(t *testing.T) {
 	}
 	chat.Tools.Add(tool)
 
-	mockClient := NewMockClient()
-	mockClient.SetStreamingEvents([]StreamEvent{
-		NewEventNewToolCall("call-1", "test-tool", `{"key": "value"}`),
-		NewEventCompletionEnded(),
+	// Round 1: tool call, Round 2: empty completion to finish
+	mockClient := NewMultiRoundMockClient([][]StreamEvent{
+		{NewEventNewToolCall("call-1", "test-tool", `{"key": "value"}`), NewEventCompletionEnded()},
+		{NewEventCompletionEnded()},
 	})
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx := context.Background()
 	events := chat.Session(ctx, mockClient)
 
-	// Use buffered channel for synchronization
-	toolCallReceived := make(chan struct{}, 1)
-	toolCallResolved := make(chan struct{}, 1)
-
+	done := make(chan struct{})
 	go func() {
+		defer close(done)
 		for event := range events {
 			if tc, ok := event.(EventNewToolCall); ok {
-				toolCallReceived <- struct{}{}
 				tc.Resolve(false)
-				toolCallResolved <- struct{}{}
 			}
 		}
 	}()
 
-	<-toolCallReceived
-	<-toolCallResolved
-	<-events
-	cancel()
+	<-done
 
 	// Check that rejection message was added to history
 	messages := chat.Messages.Snapshot()
@@ -663,33 +665,26 @@ func TestSession_NonExistentTool(t *testing.T) {
 		Tools:    &chatTools,
 	}
 
-	mockClient := NewMockClient()
-	mockClient.SetStreamingEvents([]StreamEvent{
-		NewEventNewToolCall("call-1", "non-existent", `{}`),
-		NewEventCompletionEnded(),
+	// Round 1: tool call, Round 2: empty completion to finish
+	mockClient := NewMultiRoundMockClient([][]StreamEvent{
+		{NewEventNewToolCall("call-1", "non-existent", `{}`), NewEventCompletionEnded()},
+		{NewEventCompletionEnded()},
 	})
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx := context.Background()
 	events := chat.Session(ctx, mockClient)
 
-	// Use buffered channel for synchronization
-	toolCallReceived := make(chan struct{}, 1)
-	toolCallResolved := make(chan struct{}, 1)
-
+	done := make(chan struct{})
 	go func() {
+		defer close(done)
 		for event := range events {
 			if tc, ok := event.(EventNewToolCall); ok {
-				toolCallReceived <- struct{}{}
 				tc.Resolve(true)
-				toolCallResolved <- struct{}{}
 			}
 		}
 	}()
 
-	<-toolCallReceived
-	<-toolCallResolved
-	<-events
-	cancel()
+	<-done
 
 	// Check that error message was added to history
 	messages := chat.Messages.Snapshot()
@@ -782,7 +777,6 @@ func TestHelpers_SendUserStream(t *testing.T) {
 
 	mockClient := NewMockClient()
 	mockClient.SetStreamingEvents([]StreamEvent{
-		NewEventNewToken("Response"),
 		NewEventCompletionEnded(),
 	})
 
