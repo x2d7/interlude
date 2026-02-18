@@ -649,8 +649,86 @@ func TestNewTool_WithBoolPrimitive(t *testing.T) {
 	}
 }
 
+// ============================================================================
+// Tests for GetSchema method (cache and error handling)
+// ============================================================================
+
+func TestGetSchema_Cache(t *testing.T) {
+	// Create a tool
+	tool, err := NewTool("cache_test", "test cache", func(s SimpleStruct) (string, error) {
+		return "ok", nil
+	})
+	if err != nil {
+		t.Fatalf("NewTool() error = %v", err)
+	}
+
+	// First call - generates schema
+	schema1, err := tool.GetSchema()
+	if err != nil {
+		t.Fatalf("GetSchema() first call error = %v", err)
+	}
+	if schema1 == nil {
+		t.Fatal("GetSchema() first call returned nil schema")
+	}
+
+	// Second call - should return cached schema
+	schema2, err := tool.GetSchema()
+	if err != nil {
+		t.Fatalf("GetSchema() second call error = %v", err)
+	}
+	if schema2 == nil {
+		t.Fatal("GetSchema() second call returned nil schema")
+	}
+
+	// Verify they are the same (cached)
+	if schema1["title"] != schema2["title"] {
+		t.Errorf("GetSchema() cached schema differs: %v vs %v", schema1, schema2)
+	}
+}
+
+func TestGetSchema_PanicRecovery(t *testing.T) {
+	// Create a tool with function field that causes panic during schema generation
+	type StructWithFunc struct {
+		Callback func() `json:"callback"`
+		Name     string `json:"name"`
+	}
+
+	// This will cause panic during schema generation
+	tool, err := NewTool("panic_test", "test panic recovery", func(s StructWithFunc) (string, error) {
+		return "ok", nil
+	})
+	if err == nil {
+		// If no error during creation, GetSchema should return error
+		_, err = tool.GetSchema()
+		if err == nil {
+			t.Error("GetSchema() should return error for struct with func field")
+		}
+		if err != nil {
+			// Verify error message contains expected text
+			errStr := err.Error()
+			if !contains(errStr, "panic") && !contains(errStr, "schema generation") {
+				t.Errorf("GetSchema() error should mention panic, got: %v", err)
+			}
+		}
+	}
+}
+
+// Helper function for substring check
+func contains(s, substr string) bool {
+	return len(s) >= len(substr) && (s == substr || len(s) > 0 && containsHelper(s, substr))
+}
+
+func containsHelper(s, substr string) bool {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
+}
+
 func TestNewTool_WithFloatPrimitive(t *testing.T) {
-	tool, err := NewTool("float_primitive", "test float primitive", func(f float64) (string, error) {
+	tool, err := NewTool("float_primitive", "test float64 primitive", func(f float64) (string, error) {
 		return "received", nil
 	})
 
