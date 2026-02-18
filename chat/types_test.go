@@ -110,7 +110,7 @@ func TestMessages_Snapshot_ModifyCopyDoesNotAffectOriginal(t *testing.T) {
 	snapshot := m.Snapshot()
 
 	// Modify snapshot directly (bypass AddEvent to test internal copy)
-	// Since we can't modify the slice directly (it's a value type), 
+	// Since we can't modify the slice directly (it's a value type),
 	// we verify the original is not affected by adding more events
 	m.AddEvent(NewEventNewUserMessage("Another"))
 
@@ -338,5 +338,81 @@ func TestApproveWaiter_Resolve_Concurrent(t *testing.T) {
 
 	if received != amount {
 		t.Fatalf("Expected %d verdicts, got %d", amount, received)
+	}
+}
+
+// TestApproveWaiter_Wait_CtxDoneDuringCollection tests return when ctx.Done() is triggered
+// inside the collection loop (not immediately after Wait)
+// This covers: case <-ctx.Done(): return inside the for loop
+func TestApproveWaiter_Wait_CtxDoneDuringCollection(t *testing.T) {
+	w := NewApproveWaiter()
+	ctx, cancel := context.WithCancel(context.Background())
+	
+	// Channel for communication between sender and reader goroutines
+	// sender -> ready to send next
+	// reader -> received verdict, can continue
+	ready := make(chan struct{})
+	
+	amount := 10
+	verdicts := w.Wait(ctx, amount)
+	
+	var (
+		received int
+		wg       sync.WaitGroup
+	)
+	
+	// Goroutine "Reader" - reads verdicts, decides whether to continue or cancel
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for {
+			select {
+			case _, ok := <-verdicts:
+				if !ok {
+					// Channel closed - return from function
+					return
+				}
+				received++
+				
+				// If we received 3 verdicts, cancel context (ctx.Done() inside loop)
+				if received >= 3 {
+					cancel()
+					return
+				}
+				
+				// Otherwise, tell sender it can continue
+				select {
+				case ready <- struct{}{}:
+				case <-ctx.Done():
+					return
+				}
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+	
+	// Goroutine "Sender" - sends approvals, waits for ready signal
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for i := 0; i < 5; i++ {
+			w.Resolve(Verdict{Accepted: true})
+			
+			select {
+			case <-ready:
+				// Can send next
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+	
+	// Wait for both goroutines
+	wg.Wait()
+	
+	// Should have received exactly 3 verdicts before context cancellation
+	if received != 3 {
+		t.Fatalf("Expected exactly 3 verdicts, got %d", received)
 	}
 }
