@@ -2,6 +2,7 @@ package tools
 
 import (
 	"encoding/json"
+	"fmt"
 	"reflect"
 	"sync"
 
@@ -16,20 +17,37 @@ func (t *tool) GetSchema() (map[string]any, error) {
 		return t.schema, nil
 	}
 
-	inputType := t.inputType
-	ptr := reflect.New(inputType).Interface()
-	s := jsonschema.Reflect(ptr)
-	b, err := json.Marshal(s)
-	if err != nil {
-		return nil, err
-	}
-	var schemaMap map[string]any
-	err = json.Unmarshal(b, &schemaMap)
-	if err != nil {
-		return nil, err
+	// Recover from panics during schema generation (in case of unsupported types like func, chan)
+	var schemaErr error
+	func() {
+		defer func() {
+			if r := recover(); r != nil {
+				schemaErr = fmt.Errorf("panic during schema generation: %v", r)
+			}
+		}()
+
+		inputType := t.inputType
+		ptr := reflect.New(inputType).Interface()
+		s := jsonschema.Reflect(ptr)
+		b, err := json.Marshal(s)
+		if err != nil {
+			schemaErr = err
+			return
+		}
+		var schemaMap map[string]any
+		err = json.Unmarshal(b, &schemaMap)
+		if err != nil {
+			schemaErr = err
+			return
+		}
+		t.schema = schemaMap
+	}()
+
+	if schemaErr != nil {
+		return nil, schemaErr
 	}
 
-	return schemaMap, nil
+	return t.schema, nil
 }
 
 func ensureInputStructType[T any]() reflect.Type {

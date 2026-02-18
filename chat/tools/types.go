@@ -28,13 +28,20 @@ func NewTools() Tools {
 	}
 }
 
-func (t *Tools) Add(tool tool, opts ...AddOption) (added bool) {
+func (t *Tools) Add(tool tool, opts ...AddOption) error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
+	// applying options to config
 	config := &toolAddConfig{}
 	for _, opt := range opts {
 		opt(config)
+	}
+
+	// default option cases:
+	// no WithAutoIncrement? start increment from 1
+	if !config.changedStartIncrement {
+		config.startIncrement = 1
 	}
 
 	id := tool.Id
@@ -42,17 +49,21 @@ func (t *Tools) Add(tool tool, opts ...AddOption) (added bool) {
 		id = config.overrideName
 	}
 
+	if id == "" {
+		return ErrEmptyToolID
+	}
+
 	if config.autoIncrement {
 		id = nextID(t.tools, id, config)
 	} else {
 		_, ok := t.tools[id]
 		if ok {
-			return false
+			return ErrToolAlreadyExists
 		}
 	}
 
 	t.tools[id] = tool
-	return true
+	return nil
 }
 
 func nextID(m map[string]tool, id string, config *toolAddConfig) string {
@@ -60,7 +71,19 @@ func nextID(m map[string]tool, id string, config *toolAddConfig) string {
 	if !exists {
 		return id
 	}
-	return nextID(m, fmt.Sprintf("%s_%d", id, config.startIncrement+1), config)
+
+	new_id := fmt.Sprintf("%s_%d", id, config.startIncrement)
+
+	_, exists = m[new_id]
+	if exists {
+		newConfig := &toolAddConfig{
+			startIncrement: config.startIncrement + 1,
+		}
+
+		return nextID(m, id, newConfig)
+	}
+
+	return new_id
 }
 
 func (t *Tools) Remove(name string) (removed bool) {

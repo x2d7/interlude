@@ -7,6 +7,8 @@ type toolAddConfig struct {
 
 	autoIncrement  bool
 	startIncrement int
+
+	changedStartIncrement bool
 }
 
 func WithOverrideName(name string) AddOption {
@@ -24,5 +26,6 @@ func WithAutoIncrement() AddOption {
 func WithStartIncrement(start int) AddOption {
 	return func(c *toolAddConfig) {
 		c.startIncrement = start
+		c.changedStartIncrement = true
 	}
 }

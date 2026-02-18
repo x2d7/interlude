@@ -119,6 +119,12 @@ func (a *ApproveWaiter) Resolve(verdict Verdict) {
 	select {
 	case a.verdicts <- verdict:
 	default:
-		go func() { a.verdicts <- verdict }()
+		go func() { a.resolveSync(verdict) }()
 	}
+}
+
+// resolveSync is a blocking version of Resolve for testing purposes.
+// It waits until the verdict is read from the channel.
+func (a *ApproveWaiter) resolveSync(verdict Verdict) {
+	a.verdicts <- verdict
 }

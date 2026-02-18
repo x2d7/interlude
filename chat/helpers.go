@@ -24,7 +24,7 @@ func (c *Chat) AddMessage(sender Sender, content string) error {
 }
 
 func (c *Chat) AppendEvent(event StreamEvent) {
-	c.Messages.Events = append(c.Messages.Events, event)
+	c.Messages.AddEvent(event)
 }
 
 func (c *Chat) SendStream(ctx context.Context, client Client, sender Sender, content string) <-chan StreamEvent {

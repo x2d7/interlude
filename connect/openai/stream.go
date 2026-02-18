@@ -4,9 +4,16 @@ import (
 	"errors"
 
 	"github.com/openai/openai-go/v3"
-	"github.com/openai/openai-go/v3/packages/ssestream"
 	"github.com/x2d7/interlude/chat"
 )
+
+// sseStreamer is an interface for SSE streams, used to allow mocking in tests.
+type sseStreamer interface {
+	Next() bool
+	Current() openai.ChatCompletionChunk
+	Err() error
+	Close() error
+}
 
 // OpenAIStream is a wrapper for OpenAI SSEStream
 //
@@ -17,7 +24,7 @@ type OpenAIStream struct {
 	cur   chat.StreamEvent
 
 	OpenAIClient *OpenAIClient
-	SSEStream    *ssestream.Stream[openai.ChatCompletionChunk]
+	SSEStream    sseStreamer
 }
 
 func (s *OpenAIStream) Next() bool {
