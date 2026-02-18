@@ -31,7 +31,7 @@ func NewTools() Tools {
 func (t *Tools) Add(tool tool, opts ...AddOption) error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	
+
 	// applying options to config
 	config := &toolAddConfig{}
 	for _, opt := range opts {

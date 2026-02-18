@@ -7,7 +7,7 @@ type toolAddConfig struct {
 
 	autoIncrement  bool
 	startIncrement int
-	
+
 	changedStartIncrement bool
 }
 
