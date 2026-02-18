@@ -28,7 +28,7 @@ func NewTools() Tools {
 	}
 }
 
-func (t *Tools) Add(tool tool, opts ...AddOption) (added bool) {
+func (t *Tools) Add(tool tool, opts ...AddOption) error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
@@ -42,17 +42,21 @@ func (t *Tools) Add(tool tool, opts ...AddOption) (added bool) {
 		id = config.overrideName
 	}
 
+	if id == "" {
+		return ErrEmptyToolID
+	}
+
 	if config.autoIncrement {
 		id = nextID(t.tools, id, config)
 	} else {
 		_, ok := t.tools[id]
 		if ok {
-			return false
+			return ErrToolAlreadyExists
 		}
 	}
 
 	t.tools[id] = tool
-	return true
+	return nil
 }
 
 func nextID(m map[string]tool, id string, config *toolAddConfig) string {
