@@ -40,7 +40,7 @@ jobs:
           echo "coverage.html and coverage.txt produced."
 
       - name: Fail if coverage drops below 75%
-        if: github.ref == 'refs/heads/main'
+        if: github.event_name == 'pull_request' && github.base_ref == 'main'
         run: |
           coverage=$(grep '^total:' coverage.txt | awk '{print $3}' | tr -d '%')
           echo "Total coverage: $coverage%"
