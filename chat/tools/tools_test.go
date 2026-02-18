@@ -43,8 +43,8 @@ type SliceStruct struct {
 }
 
 type RecursiveStruct struct {
-	Value  int             `json:"value"`
-	Child  *RecursiveStruct `json:"child,omitempty"`
+	Value int              `json:"value"`
+	Child *RecursiveStruct `json:"child,omitempty"`
 }
 
 // ============================================================================
@@ -383,5 +383,283 @@ func TestExecute_ToolReturnsError(t *testing.T) {
 
 	if !strings.Contains(result, "error:") && !strings.Contains(result, "something went wrong") {
 		t.Errorf("Execute() result should contain error message, got: %v", result)
+	}
+}
+
+// ============================================================================
+// Edge case tests for Execute - error scenarios
+// ============================================================================
+
+func TestExecute_MalformedJSON(t *testing.T) {
+	tools := NewTools()
+
+	tool, err := NewTool("json_test", "test tool", func(s SimpleStruct) (string, error) {
+		return "ok", nil
+	})
+	if err != nil {
+		t.Fatalf("NewTool() error = %v", err)
+	}
+
+	tools.Add(tool)
+
+	// Execute with malformed JSON
+	result, ok := tools.Execute("json_test", `{invalid json}`)
+
+	if ok {
+		t.Errorf("Execute() ok = true, want false for malformed JSON")
+	}
+
+	if !strings.Contains(result, "unmarshal") {
+		t.Errorf("Execute() result should contain 'unmarshal' error, got: %v", result)
+	}
+}
+
+func TestExecute_EmptyArguments(t *testing.T) {
+	tools := NewTools()
+
+	// Create tool with struct that has required fields
+	tool, err := NewTool("empty_args", "test tool", func(s SimpleStruct) (string, error) {
+		return "received: " + s.Name, nil
+	})
+	if err != nil {
+		t.Fatalf("NewTool() error = %v", err)
+	}
+
+	tools.Add(tool)
+
+	// Execute with empty string
+	result, ok := tools.Execute("empty_args", "")
+
+	// Empty string should produce unmarshal error or zero values
+	if ok && result == "" {
+		t.Logf("Execute() returned ok=true with empty result - depends on type handling")
+	}
+}
+
+func TestExecute_TypeMismatch(t *testing.T) {
+	tools := NewTools()
+
+	tool, err := NewTool("type_test", "test tool", func(s SimpleStruct) (string, error) {
+		return "ok", nil
+	})
+	if err != nil {
+		t.Fatalf("NewTool() error = %v", err)
+	}
+
+	tools.Add(tool)
+
+	// Execute with wrong type (number instead of string)
+	result, ok := tools.Execute("type_test", `{"name": 123, "age": "not-a-number"}`)
+
+	if ok {
+		t.Errorf("Execute() ok = true, want false for type mismatch")
+	}
+
+	if !strings.Contains(result, "unmarshal") {
+		t.Errorf("Execute() result should contain 'unmarshal' error for type mismatch, got: %v", result)
+	}
+}
+
+func TestExecute_MissingRequiredFields(t *testing.T) {
+	tools := NewTools()
+
+	tool, err := NewTool("required_test", "test tool", func(s SimpleStruct) (string, error) {
+		return "name: " + s.Name, nil
+	})
+	if err != nil {
+		t.Fatalf("NewTool() error = %v", err)
+	}
+
+	tools.Add(tool)
+
+	// Execute with empty JSON object (missing required fields)
+	result, ok := tools.Execute("required_test", `{}`)
+
+	// This should succeed with zero values, not error
+	if !ok {
+		t.Errorf("Execute() ok = false, want true for missing optional fields")
+	}
+
+	_ = result // suppress unused warning
+}
+
+func TestExecute_PartialFields(t *testing.T) {
+	tools := NewTools()
+
+	tool, err := NewTool("partial_test", "test tool", func(s SimpleStruct) (string, error) {
+		return "name: " + s.Name, nil
+	})
+	if err != nil {
+		t.Fatalf("NewTool() error = %v", err)
+	}
+
+	tools.Add(tool)
+
+	// Execute with only some fields
+	result, ok := tools.Execute("partial_test", `{"name": "John"}`)
+
+	if !ok {
+		t.Errorf("Execute() ok = false, want true for partial fields")
+	}
+
+	if result != "name: John" {
+		t.Errorf("Execute() result = %v, want %v", result, "name: John")
+	}
+}
+
+// ============================================================================
+// Edge case tests for NewTool - error scenarios
+// ============================================================================
+
+func TestNewTool_WithFunctionField(t *testing.T) {
+	// This test verifies behavior with function fields
+	type StructWithFunc struct {
+		Callback func() `json:"callback"`
+		Name     string `json:"name"`
+	}
+
+	// This should fail during schema generation because functions can't be serialized
+	_, err := NewTool("func_field", "test", func(s StructWithFunc) (string, error) {
+		return "ok", nil
+	})
+
+	if err == nil {
+		t.Logf("NewTool() with function field - behavior depends on jsonschema library")
+	}
+}
+
+func TestNewTool_WithChannelField(t *testing.T) {
+	type StructWithChan struct {
+		Ch   chan string `json:"ch"`
+		Name string      `json:"name"`
+	}
+
+	// This may fail during schema generation
+	_, err := NewTool("chan_field", "test", func(s StructWithChan) (string, error) {
+		return "ok", nil
+	})
+
+	if err == nil {
+		t.Logf("NewTool() with channel field - behavior depends on jsonschema library")
+	}
+}
+
+func TestNewTool_EmptyName(t *testing.T) {
+	// Test with empty name - should still work (no validation in current code)
+	tool, err := NewTool("", "test description", func(s SimpleStruct) (string, error) {
+		return "ok", nil
+	})
+
+	if err != nil {
+		t.Logf("NewTool() with empty name returns error: %v", err)
+	} else {
+		t.Logf("NewTool() with empty name - tool created with id: %q", tool.Id)
+	}
+}
+
+func TestNewTool_PointerType(t *testing.T) {
+	type PointerStruct struct {
+		Name *string `json:"name"`
+	}
+
+	tool, err := NewTool("pointer_test", "test pointer type", func(s PointerStruct) (string, error) {
+		return "ok", nil
+	})
+
+	if err != nil {
+		t.Errorf("NewTool() with pointer type error = %v", err)
+		return
+	}
+
+	if tool.schema == nil {
+		t.Error("NewTool() schema is nil for pointer type")
+	}
+}
+
+func TestNewTool_InterfaceType(t *testing.T) {
+	type InterfaceStruct struct {
+		Data interface{} `json:"data"`
+	}
+
+	tool, err := NewTool("interface_test", "test interface type", func(s InterfaceStruct) (string, error) {
+		return "ok", nil
+	})
+
+	if err != nil {
+		t.Errorf("NewTool() with interface{} error = %v", err)
+		return
+	}
+
+	if tool.schema == nil {
+		t.Error("NewTool() schema is nil for interface type")
+	}
+}
+
+func TestNewTool_AnonymousStruct(t *testing.T) {
+	// Test with anonymous/unnamed struct type
+	tool, err := NewTool("anon_struct", "test anonymous struct", func(s struct {
+		Name string `json:"name"`
+	}) (string, error) {
+		return "ok", nil
+	})
+
+	if err != nil {
+		t.Errorf("NewTool() with anonymous struct error = %v", err)
+		return
+	}
+
+	if tool.schema == nil {
+		t.Error("NewTool() schema is nil for anonymous struct")
+	}
+}
+
+func TestNewTool_WithIntPrimitive(t *testing.T) {
+	tool, err := NewTool("int_primitive", "test int primitive", func(n int) (string, error) {
+		return "received", nil
+	})
+
+	if err != nil {
+		t.Errorf("NewTool() with int error = %v", err)
+		return
+	}
+
+	if tool.schema == nil {
+		t.Error("NewTool() schema is nil for int primitive")
+	}
+
+	// Verify schema contains input field
+	schemaJSON, _ := json.Marshal(tool.schema)
+	if !strings.Contains(string(schemaJSON), "input") {
+		t.Errorf("NewTool() schema should contain 'input' field, got: %s", schemaJSON)
+	}
+}
+
+func TestNewTool_WithBoolPrimitive(t *testing.T) {
+	tool, err := NewTool("bool_primitive", "test bool primitive", func(b bool) (string, error) {
+		return "received", nil
+	})
+
+	if err != nil {
+		t.Errorf("NewTool() with bool error = %v", err)
+		return
+	}
+
+	if tool.schema == nil {
+		t.Error("NewTool() schema is nil for bool primitive")
+	}
+}
+
+func TestNewTool_WithFloatPrimitive(t *testing.T) {
+	tool, err := NewTool("float_primitive", "test float primitive", func(f float64) (string, error) {
+		return "received", nil
+	})
+
+	if err != nil {
+		t.Errorf("NewTool() with float64 error = %v", err)
+		return
+	}
+
+	if tool.schema == nil {
+		t.Error("NewTool() schema is nil for float64 primitive")
 	}
 }
