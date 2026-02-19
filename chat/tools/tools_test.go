@@ -266,7 +266,7 @@ func TestNewTool_PrimitiveWithMapPrimitive(t *testing.T) {
 	}
 
 	// Try to execute with valid input
-	result, ok := tools.Execute("test_map_primitive", `{"input": {"a": 1, "b": 2}}`)
+	result, ok := tools.Execute("test_map_primitive", `{"scores": {"a": 1, "b": 2}}`)
 	t.Log("result: ", result)
 	if !ok {
 		t.Errorf("Execute() error = %v", result)
