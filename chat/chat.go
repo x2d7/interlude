@@ -116,7 +116,9 @@ func (c *Chat) Session(ctx context.Context, client Client) <-chan StreamEvent {
 					}
 
 					// ending current completion
-					result <- NewEventCompletionEnded()
+					if !send(NewEventCompletionEnded()) {
+						return
+					}
 
 					if callAmount == 0 {
 						return
