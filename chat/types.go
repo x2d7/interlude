@@ -17,7 +17,17 @@ type Chat struct {
 type Client interface {
 	// NewStreaming returns a new streaming client instance
 	NewStreaming(ctx context.Context) Stream[StreamEvent]
-	// SyncInput return a copy of the client with updated input configuration (messages, tools, etc.)
+	// SyncInput returns a new client instance with input configuration synchronized from the chat.
+	//
+	// Contract:
+	//   - Must return a new client instance (original client must remain unchanged)
+	//   - Must synchronize all complete message events from chat.Messages to client params
+	//   - Must synchronize tools from chat.Tools to client params
+	//   - Must preserve client-specific settings (model, API key, endpoint, etc.)
+	//   - Should NOT synchronize streaming-only events (e.g., EventNewToken, EventCompletionEnded)
+	//     - Only full message events should be converted: EventNewUserMessage,
+	//       EventNewAssistantMessage, EventNewSystemMessage, EventNewToolMessage,
+	//       EventNewToolCall, EventNewRefusal
 	SyncInput(chat *Chat) Client
 }
 

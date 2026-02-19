@@ -23,6 +23,11 @@ func (c *Chat) AddMessage(sender Sender, content string) error {
 	return nil
 }
 
+// AppendEvent adds a full message event to the chat.
+// The event must represent a complete message (e.g., EventNewUserMessage,
+// EventNewAssistantMessage, EventNewToolMessage), not intermediate streaming
+// events like EventNewToken. Providers are not required to sync such events
+// in their SyncInput implementation.
 func (c *Chat) AppendEvent(event StreamEvent) {
 	c.Messages.AddEvent(event)
 }
