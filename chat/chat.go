@@ -169,7 +169,7 @@ func (c *Chat) Session(ctx context.Context, client Client) <-chan StreamEvent {
 func (c *Chat) handleCompletionEnd(ctx context.Context, state *sessionState) (proceed bool) {
 	// adding collected events to the chat (assistant's tokens and tool calls)
 	if state.builder.Len() != 0 {
-		c.AppendEvent(NewEventNewToken(state.builder.String()))
+		c.AppendEvent(NewEventNewAssistantMessage(state.builder.String()))
 	}
 	for _, call := range state.toolCalls {
 		c.AppendEvent(call)
