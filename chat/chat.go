@@ -20,7 +20,7 @@ func (c *Chat) Complete(ctx context.Context, client Client) <-chan StreamEvent {
 		}
 		defer stream.Close()
 
-		for stream.Next() {
+		for stream.Next(ctx) {
 			event := stream.Current()
 
 			select {
