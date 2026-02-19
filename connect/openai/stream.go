@@ -98,6 +98,9 @@ func (s *OpenAIStream) handleRawChunk(chunk openai.ChatCompletionChunk) ([]chat.
 // Should not return empty list. It would be considered as an error
 func (s *OpenAIStream) _handleRawChunk(chunk openai.ChatCompletionChunk) ([]chat.StreamEvent, error) {
 	result := make([]chat.StreamEvent, 0)
+	if len(chunk.Choices) == 0 {
+		return result, nil
+	}
 	choice := chunk.Choices[0]
 
 	delta := choice.Delta
