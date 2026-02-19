@@ -418,9 +418,9 @@ func TestSession_CollectsTokens(t *testing.T) {
 	var tokenCount int
 	var tokenContent string
 	for _, msg := range messages {
-		if msg.GetType() == eventNewToken {
+		if msg.GetType() == eventNewAssistantMessage {
 			tokenCount++
-			tokenContent = msg.(EventNewToken).Content
+			tokenContent = msg.(EventNewAssistantMessage).Content
 		}
 	}
 
