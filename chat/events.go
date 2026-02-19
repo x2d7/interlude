@@ -31,7 +31,7 @@ type EventBase struct {
 	Content string
 }
 
-type EventCompletionEnded struct{}
+type EventCompletionEnded struct{} // TODO: можно добавлять список вызовов инструментов и другую информацию о генерации
 
 func (e EventCompletionEnded) GetType() eventType { return eventCompletionEnded }
 
