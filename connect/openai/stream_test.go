@@ -415,3 +415,66 @@ func TestClose_DelegatesToSSEStream(t *testing.T) {
 		t.Error("Expected SSEStream.Close() to be called")
 	}
 }
+
+// ==================== OpenAIStream.Next() Context Cancellation Tests ====================
+
+// infiniteMockSSEStream simulates an infinite stream that never ends
+type infiniteMockSSEStream struct {
+	currentChunk openai.ChatCompletionChunk
+}
+
+func newInfiniteMockSSEStream() *infiniteMockSSEStream {
+	return &infiniteMockSSEStream{
+		currentChunk: makeChunk("token", "", nil),
+	}
+}
+
+func (m *infiniteMockSSEStream) Next() bool {
+	return true
+}
+
+func (m *infiniteMockSSEStream) Current() openai.ChatCompletionChunk {
+	return m.currentChunk
+}
+
+func (m *infiniteMockSSEStream) Err() error {
+	return nil
+}
+
+func (m *infiniteMockSSEStream) Close() error {
+	return nil
+}
+
+func TestNext_ContextCancellation_StopsStream(t *testing.T) {
+	mock := newInfiniteMockSSEStream()
+	s := newStream(mock)
+
+	// Create a cancellable context
+	ctx, cancel := context.WithCancel(context.Background())
+
+	// Get first token - should succeed
+	if !s.Next(ctx) {
+		t.Fatal("Expected Next() = true for first chunk")
+	}
+
+	// Get second token - should succeed
+	if !s.Next(ctx) {
+		t.Fatal("Expected Next() = true for second chunk")
+	}
+
+	// Cancel the context
+	cancel()
+
+	// Next() should now return false because context is cancelled
+	if s.Next(ctx) {
+		t.Fatal("Expected Next() = false after context cancellation")
+	}
+
+	// Verify that the error is set to context cancellation error
+	if s.Err() == nil {
+		t.Fatal("Expected error to be set after context cancellation")
+	}
+	if !errors.Is(s.Err(), context.Canceled) {
+		t.Errorf("Expected context.Canceled error, got %v", s.Err())
+	}
+}
