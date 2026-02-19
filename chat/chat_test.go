@@ -27,7 +27,7 @@ func NewMockStream(events []StreamEvent, err error) *MockStream {
 	}
 }
 
-func (s *MockStream) Next() bool {
+func (s *MockStream) Next(ctx context.Context) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.index >= len(s.events)-1 {
