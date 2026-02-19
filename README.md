@@ -12,6 +12,8 @@ go get github.com/x2d7/interlude
 
 ## Quick Start
 
+See [examples/](examples/) for usage examples.
+
 ```go
 client := openai.OpenAIClient{
     Endpoint: "https://openrouter.ai/api/v1",
