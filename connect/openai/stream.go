@@ -1,7 +1,7 @@
 package openai_connect
 
 import (
-	"errors"
+	"context"
 
 	"github.com/openai/openai-go/v3"
 	"github.com/x2d7/interlude/chat"
@@ -27,9 +27,17 @@ type OpenAIStream struct {
 	SSEStream    sseStreamer
 }
 
-func (s *OpenAIStream) Next() bool {
+func (s *OpenAIStream) Next(ctx context.Context) bool {
 	if s.err != nil {
 		return false
+	}
+
+	// сheck context cancellation before trying to get next chunk
+	select {
+	case <-ctx.Done():
+		s.err = ctx.Err()
+		return false
+	default:
 	}
 
 	// creating a queue if it's empty
@@ -37,10 +45,14 @@ func (s *OpenAIStream) Next() bool {
 		if proceed := s.SSEStream.Next(); proceed {
 			// parsing events
 			queue, err := s.handleRawChunk(s.SSEStream.Current())
-			// fall if error appears (or empty event list)
 			if err != nil {
 				s.err = err
 				return false
+			}
+
+			// skip empty chunks and try next one
+			if len(queue) == 0 {
+				return s.Next(ctx)
 			}
 
 			// updating queue to new parsed events
@@ -76,9 +88,6 @@ func (s *OpenAIStream) handleRawChunk(chunk openai.ChatCompletionChunk) ([]chat.
 	if err != nil {
 		return nil, err
 	}
-	if len(events) == 0 {
-		return nil, errors.New("empty events")
-	}
 	return events, nil
 }
 
@@ -89,6 +98,9 @@ func (s *OpenAIStream) handleRawChunk(chunk openai.ChatCompletionChunk) ([]chat.
 // Should not return empty list. It would be considered as an error
 func (s *OpenAIStream) _handleRawChunk(chunk openai.ChatCompletionChunk) ([]chat.StreamEvent, error) {
 	result := make([]chat.StreamEvent, 0)
+	if len(chunk.Choices) == 0 {
+		return result, nil
+	}
 	choice := chunk.Choices[0]
 
 	delta := choice.Delta
@@ -96,6 +108,9 @@ func (s *OpenAIStream) _handleRawChunk(chunk openai.ChatCompletionChunk) ([]chat
 	content := delta.Content
 	refusal := delta.Refusal
 	tools := delta.ToolCalls
+
+	// TODO: Использование FinishReason
+	_ = choice.FinishReason
 
 	if content != "" {
 		result = append(result, chat.NewEventNewToken(content))

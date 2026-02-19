@@ -1,6 +1,7 @@
 package openai_connect
 
 import (
+	"context"
 	"errors"
 	"testing"
 
@@ -211,24 +212,6 @@ func TestHandleRawChunk_EmptyDelta_ReturnsEmptyList(t *testing.T) {
 
 // ==================== handleRawChunk (decorator) Tests ====================
 
-func TestHandleRawChunkDecorator_EmptyEvents_ReturnsError(t *testing.T) {
-	s := newStream(newMockSSEStream(nil, nil))
-	// Empty delta → _handleRawChunk returns empty slice → decorator returns error
-	chunk := makeChunk("", "", nil)
-
-	events, err := s.handleRawChunk(chunk)
-
-	if err == nil {
-		t.Fatal("Expected error for empty events, got nil")
-	}
-	if err.Error() != "empty events" {
-		t.Errorf("Expected 'empty events' error, got '%s'", err.Error())
-	}
-	if events != nil {
-		t.Errorf("Expected nil events on error, got %v", events)
-	}
-}
-
 func TestHandleRawChunkDecorator_NonEmptyEvents_PassesThrough(t *testing.T) {
 	s := newStream(newMockSSEStream(nil, nil))
 	chunk := makeChunk("token", "", nil)
@@ -250,7 +233,7 @@ func TestNext_SingleChunk_ReturnsTrueAndParsesEvent(t *testing.T) {
 	mock := newMockSSEStream([]openai.ChatCompletionChunk{chunk}, nil)
 	s := newStream(mock)
 
-	if !s.Next() {
+	if !s.Next(context.Background()) {
 		t.Fatal("Expected Next() = true for first chunk")
 	}
 	event := s.Current()
@@ -269,7 +252,7 @@ func TestNext_MultipleEventsInOneChunk_DrainsQueue(t *testing.T) {
 	s := newStream(mock)
 
 	// First Next() — fetches chunk, puts 2 events in queue, returns first
-	if !s.Next() {
+	if !s.Next(context.Background()) {
 		t.Fatal("Expected Next() = true (1st)")
 	}
 	first := s.Current()
@@ -278,7 +261,7 @@ func TestNext_MultipleEventsInOneChunk_DrainsQueue(t *testing.T) {
 	}
 
 	// Second Next() — takes from queue without fetching new chunk
-	if !s.Next() {
+	if !s.Next(context.Background()) {
 		t.Fatal("Expected Next() = true (2nd, from queue)")
 	}
 	second := s.Current()
@@ -287,7 +270,7 @@ func TestNext_MultipleEventsInOneChunk_DrainsQueue(t *testing.T) {
 	}
 
 	// Third Next() — queue empty, SSE exhausted
-	if s.Next() {
+	if s.Next(context.Background()) {
 		t.Fatal("Expected Next() = false after all events consumed")
 	}
 }
@@ -296,7 +279,7 @@ func TestNext_SSEExhausted_ReturnsFalse(t *testing.T) {
 	mock := newMockSSEStream([]openai.ChatCompletionChunk{}, nil)
 	s := newStream(mock)
 
-	if s.Next() {
+	if s.Next(context.Background()) {
 		t.Fatal("Expected Next() = false for empty SSE stream")
 	}
 }
@@ -306,7 +289,7 @@ func TestNext_SSEExhausted_SetsNilErr(t *testing.T) {
 	mock := newMockSSEStream([]openai.ChatCompletionChunk{}, nil)
 	s := newStream(mock)
 
-	s.Next()
+	s.Next(context.Background())
 
 	if s.Err() != nil {
 		t.Errorf("Expected nil error after clean SSE end, got %v", s.Err())
@@ -318,28 +301,11 @@ func TestNext_SSEError_StopsAndSetsErr(t *testing.T) {
 	mock := newMockSSEStream([]openai.ChatCompletionChunk{}, apiErr)
 	s := newStream(mock)
 
-	if s.Next() {
+	if s.Next(context.Background()) {
 		t.Fatal("Expected Next() = false when SSE has error")
 	}
 	if !errors.Is(s.Err(), apiErr) {
 		t.Errorf("Expected API error, got %v", s.Err())
-	}
-}
-
-func TestNext_EmptyChunk_StopsWithEmptyEventsError(t *testing.T) {
-	// Chunk with empty delta → handleRawChunk returns "empty events" error
-	chunk := makeChunk("", "", nil)
-	mock := newMockSSEStream([]openai.ChatCompletionChunk{chunk}, nil)
-	s := newStream(mock)
-
-	if s.Next() {
-		t.Fatal("Expected Next() = false when chunk produces empty events")
-	}
-	if s.Err() == nil {
-		t.Fatal("Expected error to be set when chunk is empty")
-	}
-	if s.Err().Error() != "empty events" {
-		t.Errorf("Expected 'empty events' error, got '%s'", s.Err().Error())
 	}
 }
 
@@ -351,7 +317,7 @@ func TestNext_ErrAlreadySet_ReturnsFalseImmediately(t *testing.T) {
 	// Manually set error before calling Next()
 	s.err = errors.New("pre-existing error")
 
-	if s.Next() {
+	if s.Next(context.Background()) {
 		t.Fatal("Expected Next() = false when err is already set")
 	}
 	// SSE should not have been called (mock index remains -1)
@@ -370,7 +336,7 @@ func TestNext_MultipleChunks_AllEventsReceived(t *testing.T) {
 	s := newStream(mock)
 
 	var received []chat.StreamEvent
-	for s.Next() {
+	for s.Next(context.Background()) {
 		received = append(received, s.Current())
 	}
 
@@ -406,7 +372,7 @@ func TestCurrent_AfterNext_ReturnsEvent(t *testing.T) {
 	mock := newMockSSEStream([]openai.ChatCompletionChunk{chunk}, nil)
 	s := newStream(mock)
 
-	s.Next()
+	s.Next(context.Background())
 	if s.Current() == nil {
 		t.Error("Expected non-nil Current() after Next()")
 	}
@@ -428,7 +394,7 @@ func TestErr_AfterSSEError(t *testing.T) {
 	mock := newMockSSEStream(nil, expected)
 	s := newStream(mock)
 
-	s.Next() // triggers SSE read → SSE.Next() returns false → s.err = SSE.Err()
+	s.Next(context.Background()) // triggers SSE read → SSE.Next() returns false → s.err = SSE.Err()
 
 	if !errors.Is(s.Err(), expected) {
 		t.Errorf("Expected stream error, got %v", s.Err())
@@ -447,5 +413,68 @@ func TestClose_DelegatesToSSEStream(t *testing.T) {
 	}
 	if !mock.closed {
 		t.Error("Expected SSEStream.Close() to be called")
+	}
+}
+
+// ==================== OpenAIStream.Next() Context Cancellation Tests ====================
+
+// infiniteMockSSEStream simulates an infinite stream that never ends
+type infiniteMockSSEStream struct {
+	currentChunk openai.ChatCompletionChunk
+}
+
+func newInfiniteMockSSEStream() *infiniteMockSSEStream {
+	return &infiniteMockSSEStream{
+		currentChunk: makeChunk("token", "", nil),
+	}
+}
+
+func (m *infiniteMockSSEStream) Next() bool {
+	return true
+}
+
+func (m *infiniteMockSSEStream) Current() openai.ChatCompletionChunk {
+	return m.currentChunk
+}
+
+func (m *infiniteMockSSEStream) Err() error {
+	return nil
+}
+
+func (m *infiniteMockSSEStream) Close() error {
+	return nil
+}
+
+func TestNext_ContextCancellation_StopsStream(t *testing.T) {
+	mock := newInfiniteMockSSEStream()
+	s := newStream(mock)
+
+	// Create a cancellable context
+	ctx, cancel := context.WithCancel(context.Background())
+
+	// Get first token - should succeed
+	if !s.Next(ctx) {
+		t.Fatal("Expected Next() = true for first chunk")
+	}
+
+	// Get second token - should succeed
+	if !s.Next(ctx) {
+		t.Fatal("Expected Next() = true for second chunk")
+	}
+
+	// Cancel the context
+	cancel()
+
+	// Next() should now return false because context is cancelled
+	if s.Next(ctx) {
+		t.Fatal("Expected Next() = false after context cancellation")
+	}
+
+	// Verify that the error is set to context cancellation error
+	if s.Err() == nil {
+		t.Fatal("Expected error to be set after context cancellation")
+	}
+	if !errors.Is(s.Err(), context.Canceled) {
+		t.Errorf("Expected context.Canceled error, got %v", s.Err())
 	}
 }

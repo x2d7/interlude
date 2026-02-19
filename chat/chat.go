@@ -20,7 +20,7 @@ func (c *Chat) Complete(ctx context.Context, client Client) <-chan StreamEvent {
 		}
 		defer stream.Close()
 
-		for stream.Next() {
+		for stream.Next(ctx) {
 			event := stream.Current()
 
 			select {
@@ -38,99 +38,125 @@ func (c *Chat) Complete(ctx context.Context, client Client) <-chan StreamEvent {
 	return result
 }
 
+type sessionState struct {
+	// session context
+
+	client Client
+	events <-chan StreamEvent
+	send   func(StreamEvent) bool
+
+	// session state variables
+
+	builder      strings.Builder
+	toolCalls    []EventNewToolCall
+	lastToolCall *EventNewToolCall
+	approval     *ApproveWaiter
+}
+
+func (s *sessionState) reset() {
+	s.builder.Reset()
+	s.toolCalls = s.toolCalls[:0]
+	s.lastToolCall = nil
+	s.approval = NewApproveWaiter()
+}
+
+func (s *sessionState) flushLastToolCall() bool {
+	if s.lastToolCall == nil {
+		return true
+	}
+	ok := s.send(*s.lastToolCall)
+	s.lastToolCall = nil
+	return ok
+}
+
 func (c *Chat) Session(ctx context.Context, client Client) <-chan StreamEvent {
 	// insert chat context into client input configuration
 	client = client.SyncInput(c)
 
 	// creating the channels
 	result := make(chan StreamEvent, 16)
-	events := c.Complete(ctx, client)
+
+	// delivers a StreamEvent to the result channel
+	// skips nil events
+	send := func(event StreamEvent) bool {
+		if event == nil {
+			if ctx.Err() != nil {
+				return false
+			}
+			return true
+		}
+		select {
+		case result <- event:
+			return true
+		case <-ctx.Done():
+			return false
+		}
+	}
 
 	// event handling
 	go func() {
 		defer close(result)
 
-		// event collectors
-		var stringBuilder strings.Builder
-		toolCalls := make([]EventNewToolCall, 0)
-
-		approval := NewApproveWaiter()
+		// session state
+		state := &sessionState{
+			client: client,
+			events: c.Complete(ctx, client),
+			send:   send,
+		}
+		state.reset()
 
 		for {
 			select {
 			case <-ctx.Done():
 				return
-			case ev, ok := <-events:
+			case ev, ok := <-state.events:
 				if !ok {
-					// adding collected events to the chat (assistant's tokens and tool calls)
-					if stringBuilder.Len() != 0 {
-						c.AppendEvent(NewEventNewToken(stringBuilder.String()))
-					}
-					for _, call := range toolCalls {
-						c.AppendEvent(call)
-					}
-
-					callAmount := len(toolCalls)
-
-					// ending current completion
-					result <- NewEventCompletionEnded()
-
-					if callAmount == 0 {
+					if !c.handleCompletionEnd(ctx, state) {
 						return
 					}
-
-					// initializing approval waiter
-					verdicts := approval.Wait(ctx, callAmount)
-
-					// processing user verdicts
-					for verdict := range verdicts {
-						call := verdict.call
-
-						if verdict.Accepted {
-							callResult, success := c.Tools.Execute(call.Name, call.Content)
-							c.AppendEvent(NewEventNewToolMessage(call.CallID, callResult, success))
-						} else {
-							c.AppendEvent(NewEventNewToolMessage(call.CallID, "User declined the tool call", false))
-						}
-					}
-
-					// reset collectors
-					stringBuilder.Reset()
-					toolCalls = make([]EventNewToolCall, 0)
-
-					// reset approval waiter
-					approval = NewApproveWaiter()
-
-					// resume text completion
-					client = client.SyncInput(c)
-					events = c.Complete(ctx, client)
 					continue
 				}
 
-				// in case of ev changes inside "collecting events" block
-				var modifiedEvent StreamEvent
+				// flush last tool call if event type switched away from tool call stream
+				if _, isToolCall := ev.(EventNewToolCall); !isToolCall {
+					if !state.flushLastToolCall() {
+						return
+					}
+				}
+
+				// in case if we need to skip event
+				var skipEvent bool
 
 				// collecting events
 				switch event := ev.(type) {
 				case EventNewToken:
-					stringBuilder.WriteString(event.Content)
+					state.builder.WriteString(event.Content)
 				case EventNewToolCall:
-					approval.Attach(&event)
-					modifiedEvent = event
-					toolCalls = append(toolCalls, event)
+					// prevent adding tool call immediately — we need to wait until end of completion
+					skipEvent = true
+					if event.CallID != "" {
+						// flush the previous tool call — it's now complete
+						if !state.flushLastToolCall() {
+							return
+						}
+						state.approval.Attach(&event)
+						state.toolCalls = append(state.toolCalls, event)
+						state.lastToolCall = &state.toolCalls[len(state.toolCalls)-1]
+					} else {
+						// add token to the last tool call
+						state.lastToolCall.Content += event.Content
+					}
 				case EventNewRefusal:
 					c.AppendEvent(event)
 				}
 
-				// modifying event
-				if modifiedEvent != nil {
-					ev = modifiedEvent
+				// skipping event
+				if skipEvent {
+					continue
 				}
 
 				// sending events to the channel
-				select {
-				case result <- ev:
-				case <-ctx.Done():
+				if !send(ev) {
 					return
 				}
 			}
@@ -138,4 +164,54 @@ func (c *Chat) Session(ctx context.Context, client Client) <-chan StreamEvent {
 	}()
 
 	return result
+}
+
+func (c *Chat) handleCompletionEnd(ctx context.Context, state *sessionState) (proceed bool) {
+	// adding collected events to the chat (assistant's tokens and tool calls)
+	if state.builder.Len() != 0 {
+		c.AppendEvent(NewEventNewToken(state.builder.String()))
+	}
+	for _, call := range state.toolCalls {
+		c.AppendEvent(call)
+	}
+
+	callAmount := len(state.toolCalls)
+
+	// send last tool call if it wasn't sent yet
+	if !state.flushLastToolCall() {
+		return false
+	}
+
+	// ending current completion
+	if !state.send(NewEventCompletionEnded()) {
+		return false
+	}
+
+	if callAmount == 0 {
+		return false
+	}
+
+	// initializing approval waiter
+	verdicts := state.approval.Wait(ctx, callAmount)
+
+	// processing user verdicts
+	for verdict := range verdicts {
+		call := verdict.call
+
+		if verdict.Accepted {
+			callResult, success := c.Tools.Execute(call.Name, call.Content)
+			c.AppendEvent(NewEventNewToolMessage(call.CallID, callResult, success))
+		} else {
+			c.AppendEvent(NewEventNewToolMessage(call.CallID, "User declined the tool call", false))
+		}
+	}
+
+	// reset state
+	state.reset()
+
+	// resume text completion
+	state.client = state.client.SyncInput(c)
+	state.events = c.Complete(ctx, state.client)
+
+	return true
 }
