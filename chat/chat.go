@@ -52,6 +52,15 @@ func (s *sessionState) reset() {
 	s.approval = NewApproveWaiter()
 }
 
+func (s *sessionState) flushLastToolCall(send func(StreamEvent) bool) bool {
+    if s.lastToolCall == nil {
+        return true
+    }
+    ok := send(*s.lastToolCall)
+    s.lastToolCall = nil
+    return ok
+}
+
 func (c *Chat) Session(ctx context.Context, client Client) <-chan StreamEvent {
 	// insert chat context into client input configuration
 	client = client.SyncInput(c)
@@ -102,10 +111,8 @@ func (c *Chat) Session(ctx context.Context, client Client) <-chan StreamEvent {
 					callAmount := len(state.toolCalls)
 
 					// send last tool call if it wasn't sent yet
-					if state.lastToolCall != nil {
-						if !send(*state.lastToolCall) {
-							return
-						}
+					if !state.flushLastToolCall(send) {
+						return
 					}
 
 					// ending current completion
@@ -140,12 +147,9 @@ func (c *Chat) Session(ctx context.Context, client Client) <-chan StreamEvent {
 				}
 
 				// flush last tool call if event type switched away from tool call stream
-				if state.lastToolCall != nil {
-					if _, isToolCall := ev.(EventNewToolCall); !isToolCall {
-						if !send(*state.lastToolCall) {
-							return
-						}
-						state.lastToolCall = nil
+				if _, isToolCall := ev.(EventNewToolCall); !isToolCall {
+					if !state.flushLastToolCall(send) {
+						return
 					}
 				}
 
@@ -161,10 +165,8 @@ func (c *Chat) Session(ctx context.Context, client Client) <-chan StreamEvent {
 					skipEvent = true
 					if event.CallID != "" {
 						// flush the previous tool call — it's now complete
-						if state.lastToolCall != nil {
-							if !send(*state.lastToolCall) {
-								return
-							}
+						if !state.flushLastToolCall(send) {
+							return
 						}
 						state.approval.Attach(&event)
 						state.toolCalls = append(state.toolCalls, event)
