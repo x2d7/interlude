@@ -38,6 +38,20 @@ func (c *Chat) Complete(ctx context.Context, client Client) <-chan StreamEvent {
 	return result
 }
 
+type sessionState struct {
+	builder      strings.Builder
+	toolCalls    []EventNewToolCall
+	lastToolCall *EventNewToolCall
+	approval     *ApproveWaiter
+}
+
+func (s *sessionState) reset() {
+	s.builder.Reset()
+	s.toolCalls = s.toolCalls[:0]
+	s.lastToolCall = nil
+	s.approval = NewApproveWaiter()
+}
+
 func (c *Chat) Session(ctx context.Context, client Client) <-chan StreamEvent {
 	// insert chat context into client input configuration
 	client = client.SyncInput(c)
@@ -67,12 +81,9 @@ func (c *Chat) Session(ctx context.Context, client Client) <-chan StreamEvent {
 	go func() {
 		defer close(result)
 
-		// event collectors
-		var stringBuilder strings.Builder
-		toolCalls := make([]EventNewToolCall, 0)
-		var lastToolCall *EventNewToolCall
-
-		approval := NewApproveWaiter()
+		// session state
+		state := &sessionState{}
+		state.reset()
 
 		for {
 			select {
@@ -81,18 +92,18 @@ func (c *Chat) Session(ctx context.Context, client Client) <-chan StreamEvent {
 			case ev, ok := <-events:
 				if !ok {
 					// adding collected events to the chat (assistant's tokens and tool calls)
-					if stringBuilder.Len() != 0 {
-						c.AppendEvent(NewEventNewToken(stringBuilder.String()))
+					if state.builder.Len() != 0 {
+						c.AppendEvent(NewEventNewToken(state.builder.String()))
 					}
-					for _, call := range toolCalls {
+					for _, call := range state.toolCalls {
 						c.AppendEvent(call)
 					}
 
-					callAmount := len(toolCalls)
+					callAmount := len(state.toolCalls)
 
 					// send last tool call if it wasn't sent yet
-					if lastToolCall != nil {
-						if !send(*lastToolCall) {
+					if state.lastToolCall != nil {
+						if !send(*state.lastToolCall) {
 							return
 						}
 					}
@@ -105,7 +116,7 @@ func (c *Chat) Session(ctx context.Context, client Client) <-chan StreamEvent {
 					}
 
 					// initializing approval waiter
-					verdicts := approval.Wait(ctx, callAmount)
+					verdicts := state.approval.Wait(ctx, callAmount)
 
 					// processing user verdicts
 					for verdict := range verdicts {
@@ -119,13 +130,8 @@ func (c *Chat) Session(ctx context.Context, client Client) <-chan StreamEvent {
 						}
 					}
 
-					// reset collectors
-					stringBuilder.Reset()
-					toolCalls = make([]EventNewToolCall, 0)
-					lastToolCall = nil
-
-					// reset approval waiter
-					approval = NewApproveWaiter()
+					// reset state
+					state.reset()
 
 					// resume text completion
 					client = client.SyncInput(c)
@@ -134,12 +140,12 @@ func (c *Chat) Session(ctx context.Context, client Client) <-chan StreamEvent {
 				}
 
 				// flush last tool call if event type switched away from tool call stream
-				if lastToolCall != nil {
+				if state.lastToolCall != nil {
 					if _, isToolCall := ev.(EventNewToolCall); !isToolCall {
-						if !send(*lastToolCall) {
+						if !send(*state.lastToolCall) {
 							return
 						}
-						lastToolCall = nil
+						state.lastToolCall = nil
 					}
 				}
 
@@ -149,23 +155,23 @@ func (c *Chat) Session(ctx context.Context, client Client) <-chan StreamEvent {
 				// collecting events
 				switch event := ev.(type) {
 				case EventNewToken:
-					stringBuilder.WriteString(event.Content)
+					state.builder.WriteString(event.Content)
 				case EventNewToolCall:
 					// prevent adding tool call immediately — we need to wait until end of completion
 					skipEvent = true
 					if event.CallID != "" {
 						// flush the previous tool call — it's now complete
-						if lastToolCall != nil {
-							if !send(*lastToolCall) {
+						if state.lastToolCall != nil {
+							if !send(*state.lastToolCall) {
 								return
 							}
 						}
-						approval.Attach(&event)
-						toolCalls = append(toolCalls, event)
-						lastToolCall = &toolCalls[len(toolCalls)-1]
+						state.approval.Attach(&event)
+						state.toolCalls = append(state.toolCalls, event)
+						state.lastToolCall = &state.toolCalls[len(state.toolCalls)-1]
 					} else {
 						// add token to the last tool call
-						lastToolCall.Content += event.Content
+						state.lastToolCall.Content += event.Content
 					}
 				case EventNewRefusal:
 					c.AppendEvent(event)
