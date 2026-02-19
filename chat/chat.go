@@ -131,9 +131,6 @@ func (c *Chat) Session(ctx context.Context, client Client) <-chan StreamEvent {
 					continue
 				}
 
-				// in case of ev changes inside "collecting events" block
-				var modifiedEvent StreamEvent
-
 				// in case if we need to skip event
 				var skipEvent bool
 
@@ -154,11 +151,6 @@ func (c *Chat) Session(ctx context.Context, client Client) <-chan StreamEvent {
 					}
 				case EventNewRefusal:
 					c.AppendEvent(event)
-				}
-
-				// modifying event
-				if modifiedEvent != nil {
-					ev = modifiedEvent
 				}
 
 				// skipping event
