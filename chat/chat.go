@@ -70,6 +70,7 @@ func (c *Chat) Session(ctx context.Context, client Client) <-chan StreamEvent {
 		// event collectors
 		var stringBuilder strings.Builder
 		toolCalls := make([]EventNewToolCall, 0)
+		var lastToolCall *EventNewToolCall
 
 		approval := NewApproveWaiter()
 
@@ -89,9 +90,9 @@ func (c *Chat) Session(ctx context.Context, client Client) <-chan StreamEvent {
 
 					callAmount := len(toolCalls)
 
-					// send every call from the queue
-					for _, call := range toolCalls {
-						if !send(call) {
+					// send last tool call if it wasn't sent yet
+					if lastToolCall != nil {
+						if !send(*lastToolCall) {
 							return
 						}
 					}
@@ -121,6 +122,7 @@ func (c *Chat) Session(ctx context.Context, client Client) <-chan StreamEvent {
 					// reset collectors
 					stringBuilder.Reset()
 					toolCalls = make([]EventNewToolCall, 0)
+					lastToolCall = nil
 
 					// reset approval waiter
 					approval = NewApproveWaiter()
@@ -129,6 +131,16 @@ func (c *Chat) Session(ctx context.Context, client Client) <-chan StreamEvent {
 					client = client.SyncInput(c)
 					events = c.Complete(ctx, client)
 					continue
+				}
+
+				// flush last tool call if event type switched away from tool call stream
+				if lastToolCall != nil {
+					if _, isToolCall := ev.(EventNewToolCall); !isToolCall {
+						if !send(*lastToolCall) {
+							return
+						}
+						lastToolCall = nil
+					}
 				}
 
 				// in case if we need to skip event
@@ -141,13 +153,19 @@ func (c *Chat) Session(ctx context.Context, client Client) <-chan StreamEvent {
 				case EventNewToolCall:
 					// prevent adding tool call immediately — we need to wait until end of completion
 					skipEvent = true
-					// if callid is present — it's the start of a new tool call
 					if event.CallID != "" {
+						// flush the previous tool call — it's now complete
+						if lastToolCall != nil {
+							if !send(*lastToolCall) {
+								return
+							}
+						}
 						approval.Attach(&event)
 						toolCalls = append(toolCalls, event)
+						lastToolCall = &toolCalls[len(toolCalls)-1]
 					} else {
 						// add token to the last tool call
-						toolCalls[len(toolCalls)-1].Content += event.Content
+						lastToolCall.Content += event.Content
 					}
 				case EventNewRefusal:
 					c.AppendEvent(event)
