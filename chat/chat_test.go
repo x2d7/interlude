@@ -1284,3 +1284,135 @@ func TestSession_ToolCallAssembly_LargeContent(t *testing.T) {
 		t.Errorf("Expected assembled content with chunks, got '%s'", toolCall.Content)
 	}
 }
+
+// TestSession_MixedTokensAndToolCalls verifies the interleaved event ordering
+// when text tokens and tool calls alternate in a single completion round.
+//
+// Stream sequence: token("A") → toolCall("call-1") → token("B") → toolCall("call-2") → token("C")
+//
+// Expected consumer order: A → call-1 → B → call-2 → C → CompletionEnded
+//
+// This confirms that tool calls are emitted at the point they occur
+// (when the next non-toolcall event arrives), NOT batched at the end of the round.
+func TestSession_MixedTokensAndToolCalls(t *testing.T) {
+	chatTools := tools.NewTools()
+	chat := &Chat{
+		Messages: NewMessages(),
+		Tools:    &chatTools,
+	}
+
+	tool, err := tools.NewTool[map[string]string]("lookup", "Lookup tool",
+		func(input map[string]string) (string, error) {
+			return "ok", nil
+		})
+	if err != nil {
+		t.Fatalf("Failed to create tool: %v", err)
+	}
+	chat.Tools.Add(tool)
+
+	// No NewEventCompletionEnded() here — Session generates it from channel close.
+	// Round 2 is empty — causes Session to emit final CompletionEnded and exit.
+	mockClient := NewMultiRoundMockClient([][]StreamEvent{
+		{
+			NewEventNewToken("A"),
+			NewEventNewToolCall("call-1", "lookup", `{"q":"1"}`),
+			NewEventNewToken("B"),
+			NewEventNewToolCall("call-2", "lookup", `{"q":"2"}`),
+			NewEventNewToken("C"),
+		},
+		{}, // empty round — triggers final CompletionEnded + Session exit
+	})
+
+	ctx := context.Background()
+	result := chat.Session(ctx, mockClient)
+
+	type record struct {
+		kind    string // "token" | "tool" | "end"
+		content string // token text or tool CallID
+	}
+
+	var order []record
+
+	for event := range result {
+		switch e := event.(type) {
+		case EventNewToken:
+			order = append(order, record{"token", e.Content})
+		case EventNewToolCall:
+			order = append(order, record{"tool", e.CallID})
+			e.Resolve(true) // accept all tool calls
+		case EventCompletionEnded:
+			order = append(order, record{"end", ""})
+		}
+	}
+
+	// --- helpers ---
+	posOf := func(kind, content string) int {
+		for i, r := range order {
+			if r.kind == kind && r.content == content {
+				return i
+			}
+		}
+		return -1
+	}
+
+	posA := posOf("token", "A")
+	posCall1 := posOf("tool", "call-1")
+	posB := posOf("token", "B")
+	posCall2 := posOf("tool", "call-2")
+	posC := posOf("token", "C")
+	posEnd := posOf("end", "")
+
+	t.Logf("Event order: %v", order)
+
+	// All events must be present
+	for name, pos := range map[string]int{
+		"token:A": posA,
+		"call-1":  posCall1,
+		"token:B": posB,
+		"call-2":  posCall2,
+		"token:C": posC,
+		"end":     posEnd,
+	} {
+		if pos == -1 {
+			t.Errorf("Missing event: %s", name)
+		}
+	}
+
+	if t.Failed() {
+		return
+	}
+
+	// Verify interleaved ordering:
+	// A comes before call-1 (token before its following tool)
+	if posA >= posCall1 {
+		t.Errorf("Expected token:A (%d) before call-1 (%d)", posA, posCall1)
+	}
+	// call-1 is flushed BEFORE token:B (tool before next token)
+	if posCall1 >= posB {
+		t.Errorf("Expected call-1 (%d) before token:B (%d)", posCall1, posB)
+	}
+	// B comes before call-2
+	if posB >= posCall2 {
+		t.Errorf("Expected token:B (%d) before call-2 (%d)", posB, posCall2)
+	}
+	// call-2 is flushed BEFORE token:C
+	if posCall2 >= posC {
+		t.Errorf("Expected call-2 (%d) before token:C (%d)", posCall2, posC)
+	}
+	// CompletionEnded is last
+	if posC >= posEnd {
+		t.Errorf("Expected token:C (%d) before CompletionEnded (%d)", posC, posEnd)
+	}
+
+	// Verify tool calls also appear in history with correct data
+	messages := chat.Messages.Snapshot()
+	toolCallsInHistory := 0
+	for _, msg := range messages {
+		if msg.GetType() == eventNewToolCall {
+			toolCallsInHistory++
+		}
+	}
+	if toolCallsInHistory != 2 {
+		t.Errorf("Expected 2 tool calls in history, got %d", toolCallsInHistory)
+	}
+}
