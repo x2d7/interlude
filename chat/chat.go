@@ -46,6 +46,23 @@ func (c *Chat) Session(ctx context.Context, client Client) <-chan StreamEvent {
 	result := make(chan StreamEvent, 16)
 	events := c.Complete(ctx, client)
 
+	// delivers a StreamEvent to the result channel
+	// skips nil events
+	send := func(event StreamEvent) bool {
+		if event == nil {
+			if ctx.Err() != nil {
+				return false
+			}
+			return true
+		}
+		select {
+		case result <- event:
+			return true
+		case <-ctx.Done():
+			return false
+		}
+	}
+
 	// event handling
 	go func() {
 		defer close(result)
@@ -71,6 +88,13 @@ func (c *Chat) Session(ctx context.Context, client Client) <-chan StreamEvent {
 					}
 
 					callAmount := len(toolCalls)
+
+					// send every call from the queue
+					for _, call := range toolCalls {
+						if !send(call) {
+							return
+						}
+					}
 
 					// ending current completion
 					result <- NewEventCompletionEnded()
@@ -110,14 +134,24 @@ func (c *Chat) Session(ctx context.Context, client Client) <-chan StreamEvent {
 				// in case of ev changes inside "collecting events" block
 				var modifiedEvent StreamEvent
 
+				// in case if we need to skip event
+				var skipEvent bool
+
 				// collecting events
 				switch event := ev.(type) {
 				case EventNewToken:
 					stringBuilder.WriteString(event.Content)
 				case EventNewToolCall:
-					approval.Attach(&event)
-					modifiedEvent = event
-					toolCalls = append(toolCalls, event)
+					// prevent adding tool call immediately — we need to wait until end of completion
+					skipEvent = true
+					// if callid is present — it's the start of a new tool call
+					if event.CallID != "" {
+						approval.Attach(&event)
+						toolCalls = append(toolCalls, event)
+					} else {
+						// add token to the last tool call
+						toolCalls[len(toolCalls)-1].Content += event.Content
+					}
 				case EventNewRefusal:
 					c.AppendEvent(event)
 				}
@@ -127,10 +161,13 @@ func (c *Chat) Session(ctx context.Context, client Client) <-chan StreamEvent {
 					ev = modifiedEvent
 				}
 
+				// skipping event
+				if skipEvent {
+					continue
+				}
+
 				// sending events to the channel
-				select {
-				case result <- ev:
-				case <-ctx.Done():
+				if !send(ev) {
 					return
 				}
 			}
