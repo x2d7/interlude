@@ -39,6 +39,13 @@ func (c *Chat) Complete(ctx context.Context, client Client) <-chan StreamEvent {
 }
 
 type sessionState struct {
+	// session context
+
+	client Client
+	events <-chan StreamEvent
+	
+	// session state variables
+
 	builder      strings.Builder
 	toolCalls    []EventNewToolCall
 	lastToolCall *EventNewToolCall
@@ -67,7 +74,6 @@ func (c *Chat) Session(ctx context.Context, client Client) <-chan StreamEvent {
 
 	// creating the channels
 	result := make(chan StreamEvent, 16)
-	events := c.Complete(ctx, client)
 
 	// delivers a StreamEvent to the result channel
 	// skips nil events
@@ -91,14 +97,17 @@ func (c *Chat) Session(ctx context.Context, client Client) <-chan StreamEvent {
 		defer close(result)
 
 		// session state
-		state := &sessionState{}
+		state := &sessionState{
+			client: client,
+			events: c.Complete(ctx, client),
+		}
 		state.reset()
 
 		for {
 			select {
 			case <-ctx.Done():
 				return
-			case ev, ok := <-events:
+			case ev, ok := <-state.events:
 				if !ok {
 					// adding collected events to the chat (assistant's tokens and tool calls)
 					if state.builder.Len() != 0 {
@@ -143,8 +152,8 @@ func (c *Chat) Session(ctx context.Context, client Client) <-chan StreamEvent {
 					state.reset()
 
 					// resume text completion
-					client = client.SyncInput(c)
-					events = c.Complete(ctx, client)
+					state.client = state.client.SyncInput(c)
+					state.events = c.Complete(ctx, state.client)
 					continue
 				}
 
