@@ -50,7 +50,7 @@ toolList.Add(tool)
 
 c := chat.Chat{
     Messages: chat.NewMessages(),
-    Tools:    &toolList,
+    Tools:    toolList,
 }
 
 for event := range c.SendUserStream(ctx, &client, "What's the weather in Berlin?") {
