@@ -350,7 +350,7 @@ func TestSyncInput_WithNewTools(t *testing.T) {
 	chatTools := tools.NewTools()
 	chat := &Chat{
 		Messages: NewMessages(),
-		Tools:    &chatTools,
+		Tools:    chatTools,
 	}
 	// Add a tool using NewTool
 	tool, err := tools.NewTool("test-tool", "Test tool",
@@ -551,7 +551,7 @@ func TestSession_ToolAccepted(t *testing.T) {
 	chatTools := tools.NewTools()
 	chat := &Chat{
 		Messages: NewMessages(),
-		Tools:    &chatTools,
+		Tools:    chatTools,
 	}
 
 	// Add a test tool
@@ -608,7 +608,7 @@ func TestSession_ToolRejected(t *testing.T) {
 	chatTools := tools.NewTools()
 	chat := &Chat{
 		Messages: NewMessages(),
-		Tools:    &chatTools,
+		Tools:    chatTools,
 	}
 
 	tool, err := tools.NewTool[map[string]string]("test-tool", "Test tool",
@@ -665,7 +665,7 @@ func TestSession_NonExistentTool(t *testing.T) {
 	chatTools := tools.NewTools()
 	chat := &Chat{
 		Messages: NewMessages(),
-		Tools:    &chatTools,
+		Tools:    chatTools,
 	}
 
 	// Round 1: tool call, Round 2: empty to finish (Session generates CompletionEnded)
@@ -949,7 +949,7 @@ func TestSession_ContextCancelledWhileWaitingForApproval(t *testing.T) {
 	chatTools := tools.NewTools()
 	chat := &Chat{
 		Messages: NewMessages(),
-		Tools:    &chatTools,
+		Tools:    chatTools,
 	}
 
 	tool, err := tools.NewTool[map[string]string]("test-tool", "Test tool",
@@ -1006,7 +1006,7 @@ func TestSession_ContextCancelledBetweenRounds(t *testing.T) {
 	chatTools := tools.NewTools()
 	chat := &Chat{
 		Messages: NewMessages(),
-		Tools:    &chatTools,
+		Tools:    chatTools,
 	}
 
 	tool, err := tools.NewTool[map[string]string]("test-tool", "Test tool",
@@ -1062,7 +1062,7 @@ func TestSession_ToolCallAssembly_Basic(t *testing.T) {
 	chatTools := tools.NewTools()
 	chat := &Chat{
 		Messages: NewMessages(),
-		Tools:    &chatTools,
+		Tools:    chatTools,
 	}
 
 	tool, err := tools.NewTool[map[string]string]("weather", "Get weather",
@@ -1128,7 +1128,7 @@ func TestSession_ToolCallAssembly_MultipleToolsWithAssembly(t *testing.T) {
 	chatTools := tools.NewTools()
 	chat := &Chat{
 		Messages: NewMessages(),
-		Tools:    &chatTools,
+		Tools:    chatTools,
 	}
 
 	tool1, err := tools.NewTool[map[string]string]("tool1", "Tool 1",
@@ -1223,7 +1223,7 @@ func TestSession_ToolCallAssembly_LargeContent(t *testing.T) {
 	chatTools := tools.NewTools()
 	chat := &Chat{
 		Messages: NewMessages(),
-		Tools:    &chatTools,
+		Tools:    chatTools,
 	}
 
 	tool, err := tools.NewTool[map[string]string]("search", "Search",
@@ -1298,7 +1298,7 @@ func TestSession_MixedTokensAndToolCalls(t *testing.T) {
 	chatTools := tools.NewTools()
 	chat := &Chat{
 		Messages: NewMessages(),
-		Tools:    &chatTools,
+		Tools:    chatTools,
 	}
 
 	tool, err := tools.NewTool[map[string]string]("lookup", "Lookup tool",
@@ -1414,5 +1414,114 @@ func TestSession_MixedTokensAndToolCalls(t *testing.T) {
 	}
 	if toolCallsInHistory != 2 {
 		t.Errorf("Expected 2 tool calls in history, got %d", toolCallsInHistory)
+	}
+}
+
+// ==================== ensureDefaults Tests ====================
+
+// TestEnsureDefaults_MessagesNil tests that Messages is initialized when nil
+func TestEnsureDefaults_MessagesNil(t *testing.T) {
+	tools := tools.NewTools()
+	chat := &Chat{
+		Messages: nil,
+		Tools:    tools,
+	}
+
+	chat.ensureDefaults()
+
+	if chat.Messages == nil {
+		t.Error("Messages should not be nil after ensureDefaults")
+	}
+
+	// Verify Messages is usable
+	messages := chat.Messages.Snapshot()
+	if len(messages) != 0 {
+		t.Errorf("Expected empty messages, got %d", len(messages))
+	}
+}
+
+// TestEnsureDefaults_ToolsNil tests that Tools is initialized when nil
+func TestEnsureDefaults_ToolsNil(t *testing.T) {
+	chat := &Chat{
+		Messages: NewMessages(),
+		Tools:    nil,
+	}
+
+	chat.ensureDefaults()
+
+	if chat.Tools == nil {
+		t.Error("Tools should not be nil after ensureDefaults")
+	}
+
+	// Verify Tools is usable (empty slice, not nil)
+	toolList := chat.Tools.Snapshot()
+	if len(toolList) != 0 {
+		t.Errorf("Expected empty tools, got %d", len(toolList))
+	}
+}
+
+// TestEnsureDefaults_BothNil tests that both Messages and Tools are initialized when both are nil
+func TestEnsureDefaults_BothNil(t *testing.T) {
+	chat := &Chat{
+		Messages: nil,
+		Tools:    nil,
+	}
+
+	chat.ensureDefaults()
+
+	if chat.Messages == nil {
+		t.Error("Messages should not be nil after ensureDefaults")
+	}
+
+	if chat.Tools == nil {
+		t.Error("Tools should not be nil after ensureDefaults")
+	}
+}
+
+// TestEnsureDefaults_AlreadySet tests that existing values are not overwritten
+func TestEnsureDefaults_AlreadySet(t *testing.T) {
+	// Setup chat with existing messages and tools
+	ts := tools.NewTools()
+	chat := &Chat{
+		Messages: NewMessages(),
+		Tools:    ts, // Use NewTools() to properly initialize
+	}
+
+	// Add some data
+	chat.AddMessage(SenderUser{}, "test message")
+	tool, err := tools.NewTool("test-tool", "Test tool",
+		func(input map[string]string) (string, error) {
+			return "result", nil
+		})
+	if err != nil {
+		t.Fatalf("Failed to create tool: %v", err)
+	}
+	chat.Tools.Add(tool)
+
+	// Get pointers to verify they're not replaced
+	messagesBefore := chat.Messages
+	toolsBefore := chat.Tools
+
+	// Call ensureDefaults
+	chat.ensureDefaults()
+
+	// Verify same instances are preserved
+	if chat.Messages != messagesBefore {
+		t.Error("Messages should not be replaced when already set")
+	}
+
+	if chat.Tools != toolsBefore {
+		t.Error("Tools should not be replaced when already set")
+	}
+
+	// Verify data is still intact
+	messages := chat.Messages.Snapshot()
+	if len(messages) != 1 {
+		t.Errorf("Expected 1 message, got %d", len(messages))
+	}
+
+	toolList := chat.Tools.Snapshot()
+	if len(toolList) != 1 {
+		t.Errorf("Expected 1 tool, got %d", len(toolList))
 	}
 }

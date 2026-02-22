@@ -22,10 +22,12 @@ type Tools struct {
 	tools map[string]tool
 }
 
-func NewTools() Tools {
-	return Tools{
+func NewTools() *Tools {
+	t := Tools{
 		tools: make(map[string]tool),
 	}
+
+	return &t
 }
 
 func (t *Tools) Add(tool tool, opts ...AddOption) error {

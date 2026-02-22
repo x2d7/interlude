@@ -257,7 +257,7 @@ func TestOpenAIMessages_Add_Sequence(t *testing.T) {
 
 func TestConvertTools_EmptyTools(t *testing.T) {
 	ts := tools.NewTools()
-	result := ConvertTools(&ts)
+	result := ConvertTools(ts)
 
 	if len(result) != 0 {
 		t.Errorf("Expected empty slice for empty tools, got %d elements", len(result))
@@ -277,7 +277,7 @@ func TestConvertTools_SingleTool(t *testing.T) {
 	}
 	ts.Add(tool)
 
-	result := ConvertTools(&ts)
+	result := ConvertTools(ts)
 
 	if len(result) != 1 {
 		t.Fatalf("Expected 1 tool, got %d", len(result))
@@ -308,7 +308,7 @@ func TestConvertTools_MultipleTools(t *testing.T) {
 		ts.Add(tool)
 	}
 
-	result := ConvertTools(&ts)
+	result := ConvertTools(ts)
 
 	if len(result) != 3 {
 		t.Fatalf("Expected 3 tools, got %d", len(result))
@@ -344,7 +344,7 @@ func TestConvertTools_ParametersIncluded(t *testing.T) {
 	}
 	ts.Add(tool)
 
-	result := ConvertTools(&ts)
+	result := ConvertTools(ts)
 
 	if len(result) != 1 {
 		t.Fatalf("Expected 1 tool, got %d", len(result))
@@ -444,7 +444,7 @@ func TestSyncInput_ToolsAreSynced(t *testing.T) {
 
 	c := &chat.Chat{
 		Messages: chat.NewMessages(),
-		Tools:    &ts,
+		Tools:    ts,
 	}
 
 	result := original.SyncInput(c)
