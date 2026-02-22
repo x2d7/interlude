@@ -3,6 +3,8 @@ package chat
 import (
 	"context"
 	"strings"
+
+	"github.com/x2d7/interlude/chat/tools"
 )
 
 func (c *Chat) Complete(ctx context.Context, client Client) <-chan StreamEvent {
@@ -69,7 +71,20 @@ func (s *sessionState) flushLastToolCall() bool {
 	return ok
 }
 
+func (c *Chat) ensureDefaults() {
+	if c.Messages == nil {
+		c.Messages = NewMessages()
+	}
+	if c.Tools == nil {
+		t := tools.NewTools()
+		c.Tools = &t
+	}
+}
+
 func (c *Chat) Session(ctx context.Context, client Client) <-chan StreamEvent {
+	// ensuring default values
+	c.ensureDefaults()
+
 	// insert chat context into client input configuration
 	client = client.SyncInput(c)
 
