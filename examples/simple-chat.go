@@ -39,7 +39,7 @@ func main() {
 	t := tools.NewTools()
 	c := chat.Chat{
 		Messages: chat.NewMessages(),
-		Tools:    &t,
+		Tools:    t,
 	}
 
 	fmt.Println(colorize(dim, "Type your message and press Enter. Ctrl+C or Ctrl+D to exit."))

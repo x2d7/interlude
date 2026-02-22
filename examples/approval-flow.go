@@ -78,7 +78,7 @@ func main() {
 
 	c := chat.Chat{
 		Messages: chat.NewMessages(),
-		Tools:    &toolList,
+		Tools:    toolList,
 	}
 
 	// Prime the model with a concrete tool usage example before the real prompt
