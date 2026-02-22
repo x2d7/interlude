@@ -77,7 +77,7 @@ func (c *Chat) ensureDefaults() {
 	}
 	if c.Tools == nil {
 		t := tools.NewTools()
-		c.Tools = &t
+		c.Tools = t
 	}
 }
 

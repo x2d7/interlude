@@ -1424,7 +1424,7 @@ func TestEnsureDefaults_MessagesNil(t *testing.T) {
 	tools := tools.NewTools()
 	chat := &Chat{
 		Messages: nil,
-		Tools:    &tools,
+		Tools:    tools,
 	}
 
 	chat.ensureDefaults()
@@ -1484,7 +1484,7 @@ func TestEnsureDefaults_AlreadySet(t *testing.T) {
 	ts := tools.NewTools()
 	chat := &Chat{
 		Messages: NewMessages(),
-		Tools:    &ts, // Use NewTools() to properly initialize
+		Tools:    ts, // Use NewTools() to properly initialize
 	}
 
 	// Add some data
