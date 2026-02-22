@@ -350,7 +350,7 @@ func TestSyncInput_WithNewTools(t *testing.T) {
 	chatTools := tools.NewTools()
 	chat := &Chat{
 		Messages: NewMessages(),
-		Tools:    &chatTools,
+		Tools:    chatTools,
 	}
 	// Add a tool using NewTool
 	tool, err := tools.NewTool("test-tool", "Test tool",
@@ -551,7 +551,7 @@ func TestSession_ToolAccepted(t *testing.T) {
 	chatTools := tools.NewTools()
 	chat := &Chat{
 		Messages: NewMessages(),
-		Tools:    &chatTools,
+		Tools:    chatTools,
 	}
 
 	// Add a test tool
@@ -608,7 +608,7 @@ func TestSession_ToolRejected(t *testing.T) {
 	chatTools := tools.NewTools()
 	chat := &Chat{
 		Messages: NewMessages(),
-		Tools:    &chatTools,
+		Tools:    chatTools,
 	}
 
 	tool, err := tools.NewTool[map[string]string]("test-tool", "Test tool",
@@ -665,7 +665,7 @@ func TestSession_NonExistentTool(t *testing.T) {
 	chatTools := tools.NewTools()
 	chat := &Chat{
 		Messages: NewMessages(),
-		Tools:    &chatTools,
+		Tools:    chatTools,
 	}
 
 	// Round 1: tool call, Round 2: empty to finish (Session generates CompletionEnded)
@@ -949,7 +949,7 @@ func TestSession_ContextCancelledWhileWaitingForApproval(t *testing.T) {
 	chatTools := tools.NewTools()
 	chat := &Chat{
 		Messages: NewMessages(),
-		Tools:    &chatTools,
+		Tools:    chatTools,
 	}
 
 	tool, err := tools.NewTool[map[string]string]("test-tool", "Test tool",
@@ -1006,7 +1006,7 @@ func TestSession_ContextCancelledBetweenRounds(t *testing.T) {
 	chatTools := tools.NewTools()
 	chat := &Chat{
 		Messages: NewMessages(),
-		Tools:    &chatTools,
+		Tools:    chatTools,
 	}
 
 	tool, err := tools.NewTool[map[string]string]("test-tool", "Test tool",
@@ -1062,7 +1062,7 @@ func TestSession_ToolCallAssembly_Basic(t *testing.T) {
 	chatTools := tools.NewTools()
 	chat := &Chat{
 		Messages: NewMessages(),
-		Tools:    &chatTools,
+		Tools:    chatTools,
 	}
 
 	tool, err := tools.NewTool[map[string]string]("weather", "Get weather",
@@ -1128,7 +1128,7 @@ func TestSession_ToolCallAssembly_MultipleToolsWithAssembly(t *testing.T) {
 	chatTools := tools.NewTools()
 	chat := &Chat{
 		Messages: NewMessages(),
-		Tools:    &chatTools,
+		Tools:    chatTools,
 	}
 
 	tool1, err := tools.NewTool[map[string]string]("tool1", "Tool 1",
@@ -1223,7 +1223,7 @@ func TestSession_ToolCallAssembly_LargeContent(t *testing.T) {
 	chatTools := tools.NewTools()
 	chat := &Chat{
 		Messages: NewMessages(),
-		Tools:    &chatTools,
+		Tools:    chatTools,
 	}
 
 	tool, err := tools.NewTool[map[string]string]("search", "Search",
@@ -1298,7 +1298,7 @@ func TestSession_MixedTokensAndToolCalls(t *testing.T) {
 	chatTools := tools.NewTools()
 	chat := &Chat{
 		Messages: NewMessages(),
-		Tools:    &chatTools,
+		Tools:    chatTools,
 	}
 
 	tool, err := tools.NewTool[map[string]string]("lookup", "Lookup tool",
