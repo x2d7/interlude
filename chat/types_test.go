@@ -5,6 +5,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"go.uber.org/goleak"
 )
 
 // ==================== Messages Tests ====================
@@ -127,7 +129,8 @@ func TestMessages_Snapshot_ModifyCopyDoesNotAffectOriginal(t *testing.T) {
 // ==================== ApproveWaiter Tests ====================
 
 func TestNewApproveWaiter(t *testing.T) {
-	w := NewApproveWaiter()
+	ctx := context.Background()
+	w := NewApproveWaiter(ctx)
 	if w == nil {
 		t.Fatal("NewApproveWaiter returned nil")
 	}
@@ -137,8 +140,10 @@ func TestNewApproveWaiter(t *testing.T) {
 }
 
 func TestApproveWaiter_Attach(t *testing.T) {
-	w := NewApproveWaiter()
 	event := NewEventNewToolCall("call-id", "tool-name", `{"arg": "value"}`)
+
+	ctx := context.Background()
+	w := NewApproveWaiter(ctx)
 
 	w.Attach(&event)
 
@@ -148,8 +153,8 @@ func TestApproveWaiter_Attach(t *testing.T) {
 }
 
 func TestApproveWaiter_Wait_ZeroAmount(t *testing.T) {
-	w := NewApproveWaiter()
 	ctx := context.Background()
+	w := NewApproveWaiter(ctx)
 
 	verdicts := w.Wait(ctx, 0)
 
@@ -165,8 +170,8 @@ func TestApproveWaiter_Wait_ZeroAmount(t *testing.T) {
 }
 
 func TestApproveWaiter_Wait_SingleVerdict(t *testing.T) {
-	w := NewApproveWaiter()
 	ctx, cancel := context.WithCancel(context.Background())
+	w := NewApproveWaiter(ctx)
 	defer cancel()
 
 	verdicts := w.Wait(ctx, 1)
@@ -186,8 +191,8 @@ func TestApproveWaiter_Wait_SingleVerdict(t *testing.T) {
 }
 
 func TestApproveWaiter_Wait_MultipleVerdicts(t *testing.T) {
-	w := NewApproveWaiter()
 	ctx, cancel := context.WithCancel(context.Background())
+	w := NewApproveWaiter(ctx)
 	defer cancel()
 
 	amount := 3
@@ -211,8 +216,8 @@ func TestApproveWaiter_Wait_MultipleVerdicts(t *testing.T) {
 }
 
 func TestApproveWaiter_Wait_ContextCancellation(t *testing.T) {
-	w := NewApproveWaiter()
 	ctx, cancel := context.WithCancel(context.Background())
+	w := NewApproveWaiter(ctx)
 
 	verdicts := w.Wait(ctx, 5)
 
@@ -231,8 +236,8 @@ func TestApproveWaiter_Wait_ContextCancellation(t *testing.T) {
 }
 
 func TestApproveWaiter_Resolve_AcceptTrue(t *testing.T) {
-	w := NewApproveWaiter()
 	ctx, cancel := context.WithCancel(context.Background())
+	w := NewApproveWaiter(ctx)
 	defer cancel()
 
 	verdicts := w.Wait(ctx, 1)
@@ -250,8 +255,9 @@ func TestApproveWaiter_Resolve_AcceptTrue(t *testing.T) {
 }
 
 func TestApproveWaiter_Resolve_AcceptFalse(t *testing.T) {
-	w := NewApproveWaiter()
+
 	ctx, cancel := context.WithCancel(context.Background())
+	w := NewApproveWaiter(ctx)
 	defer cancel()
 
 	verdicts := w.Wait(ctx, 1)
@@ -276,7 +282,8 @@ func TestEventNewToolCall_Resolve_NoApproval(t *testing.T) {
 }
 
 func TestEventNewToolCall_Resolve_DoubleCall(t *testing.T) {
-	w := NewApproveWaiter()
+	ctx, cancel := context.WithCancel(context.Background())
+	w := NewApproveWaiter(ctx)
 	event := NewEventNewToolCall("call-id", "tool-name", `{}`)
 
 	w.Attach(&event)
@@ -286,7 +293,6 @@ func TestEventNewToolCall_Resolve_DoubleCall(t *testing.T) {
 
 	// Second resolve should be ignored (answered is now true)
 	// We verify this by checking that only one verdict is received
-	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	verdicts := w.Wait(ctx, 1)
@@ -309,8 +315,8 @@ func TestEventNewToolCall_Resolve_DoubleCall(t *testing.T) {
 }
 
 func TestApproveWaiter_Resolve_Concurrent(t *testing.T) {
-	w := NewApproveWaiter()
 	ctx, cancel := context.WithCancel(context.Background())
+	w := NewApproveWaiter(ctx)
 	defer cancel()
 
 	amount := 10
@@ -346,8 +352,8 @@ func TestApproveWaiter_Resolve_Concurrent(t *testing.T) {
 // inside the collection loop (not immediately after Wait)
 // This covers: case <-ctx.Done(): return inside the for loop
 func TestApproveWaiter_Wait_CtxDoneDuringCollection(t *testing.T) {
-	w := NewApproveWaiter()
 	ctx, cancel := context.WithCancel(context.Background())
+	w := NewApproveWaiter(ctx)
 
 	// Channel for communication between sender and reader goroutines
 	// sender -> ready to send next
@@ -421,8 +427,8 @@ func TestApproveWaiter_Wait_CtxDoneDuringCollection(t *testing.T) {
 // TestApproveWaiter_Wait_InnerCtxDone tests ctx.Done() triggered inside the inner select
 // This covers: after receiving verdict from a.verdicts, ctx.Done() in inner select causes return
 func TestApproveWaiter_Wait_InnerCtxDone(t *testing.T) {
-	w := NewApproveWaiter()
 	ctx, cancel := context.WithCancel(context.Background())
+	w := NewApproveWaiter(ctx)
 	defer cancel()
 
 	resolved := make(chan struct{})
@@ -454,4 +460,19 @@ func TestApproveWaiter_Wait_InnerCtxDone(t *testing.T) {
 	case <-time.After(500 * time.Millisecond):
 		t.Fatal("timeout waiting for worker to finish after cancel")
 	}
+}
+
+func TestApproveWaiter_ResolveLeaksGoroutine(t *testing.T) {
+	defer goleak.VerifyNone(t, goleak.IgnoreCurrent())
+
+	ctx, cancel := context.WithCancel(context.Background())
+	aw := NewApproveWaiter(ctx)
+
+	// Calling Resolve without a reader — goroutine will be spawned via resolveSync
+	aw.Resolve(Verdict{Accepted: true})
+
+	// Cancelling context — goroutine should exit via ctx.Done()
+	cancel()
+
+	// If goroutine leaked, goleak.VerifyNone will catch it and fail the test
 }

@@ -74,11 +74,13 @@ type Verdict struct {
 
 type ApproveWaiter struct {
 	verdicts chan Verdict
+	ctx      context.Context
 }
 
-func NewApproveWaiter() *ApproveWaiter {
+func NewApproveWaiter(ctx context.Context) *ApproveWaiter {
 	return &ApproveWaiter{
 		verdicts: make(chan Verdict),
+		ctx:      ctx,
 	}
 }
 
@@ -136,5 +138,9 @@ func (a *ApproveWaiter) Resolve(verdict Verdict) {
 // resolveSync is a blocking version of Resolve for testing purposes.
 // It waits until the verdict is read from the channel.
 func (a *ApproveWaiter) resolveSync(verdict Verdict) {
-	a.verdicts <- verdict
+	select {
+	case a.verdicts <- verdict:
+	case <-a.ctx.Done():
+		return
+	}
 }
