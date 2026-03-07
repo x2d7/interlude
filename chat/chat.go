@@ -46,6 +46,7 @@ type sessionState struct {
 	client Client
 	events <-chan StreamEvent
 	send   func(StreamEvent) bool
+	ctx    context.Context
 
 	// session state variables
 
@@ -59,7 +60,7 @@ func (s *sessionState) reset() {
 	s.builder.Reset()
 	s.toolCalls = s.toolCalls[:0]
 	s.lastToolCall = nil
-	s.approval = NewApproveWaiter()
+	s.approval = NewApproveWaiter(s.ctx)
 }
 
 func (s *sessionState) flushLastToolCall() bool {
@@ -117,6 +118,7 @@ func (c *Chat) Session(ctx context.Context, client Client) <-chan StreamEvent {
 			client: client,
 			events: c.Complete(ctx, client),
 			send:   send,
+			ctx:    ctx,
 		}
 		state.reset()
 

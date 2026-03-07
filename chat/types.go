@@ -74,11 +74,13 @@ type Verdict struct {
 
 type ApproveWaiter struct {
 	verdicts chan Verdict
+	ctx      context.Context
 }
 
-func NewApproveWaiter() *ApproveWaiter {
+func NewApproveWaiter(ctx context.Context) *ApproveWaiter {
 	return &ApproveWaiter{
 		verdicts: make(chan Verdict),
+		ctx:      ctx,
 	}
 }
 
