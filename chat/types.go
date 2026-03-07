@@ -138,5 +138,9 @@ func (a *ApproveWaiter) Resolve(verdict Verdict) {
 // resolveSync is a blocking version of Resolve for testing purposes.
 // It waits until the verdict is read from the channel.
 func (a *ApproveWaiter) resolveSync(verdict Verdict) {
-	a.verdicts <- verdict
+	select {
+	case a.verdicts <- verdict:
+	case <-a.ctx.Done():
+		return
+	}
 }
