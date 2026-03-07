@@ -5,6 +5,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"go.uber.org/goleak"
 )
 
 // ==================== Messages Tests ====================
@@ -454,4 +456,20 @@ func TestApproveWaiter_Wait_InnerCtxDone(t *testing.T) {
 	case <-time.After(500 * time.Millisecond):
 		t.Fatal("timeout waiting for worker to finish after cancel")
 	}
+}
+
+func TestApproveWaiter_ResolveLeaksGoroutine(t *testing.T) {
+	defer goleak.VerifyNone(t)
+
+	aw := NewApproveWaiter()
+
+	_, cancel := context.WithCancel(context.Background())
+
+	// Calling Resolve without a reader — goroutine will be spawned via resolveSync
+	aw.Resolve(Verdict{Accepted: true})
+
+	// Cancelling context — goroutine should exit via ctx.Done()
+	cancel()
+
+	// If goroutine leaked, goleak.VerifyNone will catch it and fail the test
 }
