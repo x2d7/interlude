@@ -24,10 +24,10 @@ type Client interface {
 	//   - Must synchronize all complete message events from chat.Messages to client params
 	//   - Must synchronize tools from chat.Tools to client params
 	//   - Must preserve client-specific settings (model, API key, endpoint, etc.)
-	//   - Should NOT synchronize streaming-only events (e.g., EventNewToken, EventCompletionEnded)
-	//     - Only full message events should be converted: EventNewUserMessage,
-	//       EventNewAssistantMessage, EventNewSystemMessage, EventNewToolMessage,
-	//       EventNewToolCall, EventNewRefusal
+	//   - Should NOT synchronize streaming-only events (e.g., EventToken, EventCompletionEnded)
+	//     - Only full message events should be converted: EventUserMessage,
+	//       EventAssistantMessage, EventSystemMessage, EventToolMessage,
+	//       EventToolCall, EventRefusal
 	SyncInput(chat *Chat) Client
 }
 

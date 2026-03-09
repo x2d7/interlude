@@ -171,10 +171,10 @@ func TestComplete_SuccessTokens(t *testing.T) {
 
 	// Verify token content
 	if received[0].GetType() != eventToken {
-		t.Errorf("Expected EventNewToken, got %v", received[0].GetType())
+		t.Errorf("Expected EventToken, got %v", received[0].GetType())
 	}
 	if received[1].GetType() != eventToken {
-		t.Errorf("Expected EventNewToken, got %v", received[1].GetType())
+		t.Errorf("Expected EventToken, got %v", received[1].GetType())
 	}
 }
 
@@ -207,7 +207,7 @@ func TestComplete_SuccessToolCall(t *testing.T) {
 	// Second event should be tool call
 	toolCall, ok := received[1].(EventToolCall)
 	if !ok {
-		t.Fatalf("Expected EventNewToolCall, got %T", received[1])
+		t.Fatalf("Expected EventToolCall, got %T", received[1])
 	}
 
 	if toolCall.CallID != "call-123" {
@@ -245,7 +245,7 @@ func TestComplete_NilStream(t *testing.T) {
 
 	errEvent, ok := received[0].(EventError)
 	if !ok {
-		t.Fatalf("Expected EventNewError, got %T", received[0])
+		t.Fatalf("Expected EventError, got %T", received[0])
 	}
 
 	if !errors.Is(errEvent.Error, ErrNilStreaming) {
@@ -281,7 +281,7 @@ func TestComplete_StreamError(t *testing.T) {
 
 	errEvent, ok := received[1].(EventError)
 	if !ok {
-		t.Fatalf("Expected EventNewError, got %T", received[1])
+		t.Fatalf("Expected EventError, got %T", received[1])
 	}
 
 	if errEvent.Error.Error() != "API error" {
@@ -340,7 +340,7 @@ func TestSyncInput_WithNewMessages(t *testing.T) {
 	}
 
 	if messages[0].GetType() != eventUserMessage {
-		t.Errorf("Expected EventNewUserMessage, got %v", messages[0].GetType())
+		t.Errorf("Expected EventUserMessage, got %v", messages[0].GetType())
 	}
 }
 
@@ -741,13 +741,13 @@ func TestHelpers_AddMessage(t *testing.T) {
 	}
 
 	if messages[0].GetType() != eventUserMessage {
-		t.Errorf("Expected EventNewUserMessage, got %v", messages[0].GetType())
+		t.Errorf("Expected EventUserMessage, got %v", messages[0].GetType())
 	}
 	if messages[1].GetType() != eventAssistantMessage {
-		t.Errorf("Expected EventNewAssistantMessage, got %v", messages[1].GetType())
+		t.Errorf("Expected EventAssistantMessage, got %v", messages[1].GetType())
 	}
 	if messages[2].GetType() != eventSystemMessage {
-		t.Errorf("Expected EventNewSystemMessage, got %v", messages[2].GetType())
+		t.Errorf("Expected EventSystemMessage, got %v", messages[2].GetType())
 	}
 }
 
@@ -767,7 +767,7 @@ func TestHelpers_AppendEvent(t *testing.T) {
 	}
 
 	if messages[0].GetType() != eventToken {
-		t.Errorf("Expected EventNewToken, got %v", messages[0].GetType())
+		t.Errorf("Expected EventToken, got %v", messages[0].GetType())
 	}
 }
 
@@ -793,7 +793,7 @@ func TestHelpers_SendUserStream(t *testing.T) {
 	}
 
 	if messages[0].GetType() != eventUserMessage {
-		t.Errorf("Expected EventNewUserMessage, got %v", messages[0].GetType())
+		t.Errorf("Expected EventUserMessage, got %v", messages[0].GetType())
 	}
 
 	// Drain events
@@ -825,7 +825,7 @@ func TestHelpers_SendAssistantStream(t *testing.T) {
 	}
 
 	if messages[0].GetType() != eventAssistantMessage {
-		t.Errorf("Expected EventNewAssistantMessage, got %v", messages[0].GetType())
+		t.Errorf("Expected EventAssistantMessage, got %v", messages[0].GetType())
 	}
 
 	// Drain events
@@ -857,7 +857,7 @@ func TestHelpers_SendSystemStream(t *testing.T) {
 	}
 
 	if messages[0].GetType() != eventSystemMessage {
-		t.Errorf("Expected EventNewSystemMessage, got %v", messages[0].GetType())
+		t.Errorf("Expected EventSystemMessage, got %v", messages[0].GetType())
 	}
 
 	// Drain events

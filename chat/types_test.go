@@ -274,14 +274,14 @@ func TestApproveWaiter_Resolve_AcceptFalse(t *testing.T) {
 	}
 }
 
-func TestEventNewToolCall_Resolve_NoApproval(t *testing.T) {
+func TestEventToolCall_Resolve_NoApproval(t *testing.T) {
 	event := NewEventToolCall("call-id", "tool-name", `{}`)
 
 	// Should not panic when called without approval attached
 	event.Resolve(true)
 }
 
-func TestEventNewToolCall_Resolve_DoubleCall(t *testing.T) {
+func TestEventToolCall_Resolve_DoubleCall(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	w := NewApproveWaiter(ctx)
 	event := NewEventToolCall("call-id", "tool-name", `{}`)

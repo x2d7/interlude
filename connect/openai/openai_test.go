@@ -220,7 +220,7 @@ func TestOpenAIMessages_Add_TwoToolCalls_MergedIntoOneAssistant(t *testing.T) {
 
 func TestOpenAIMessages_Add_UnknownEventType_NoMessageAdded(t *testing.T) {
 	m := openAIMessages{}
-	// EventNewToken is not handled in Add — should be silently ignored
+	// EventToken is not handled in Add — should be silently ignored
 	m.Add(chat.NewEventToken("some token"))
 
 	if len(m) != 0 {
