@@ -13,6 +13,7 @@ const (
 
 	eventToken           eventType = "token"
 	eventToolCall        eventType = "tool_call"
+	eventToolCallToken   eventType = "tool_call_token"
 	eventRefusal         eventType = "refusal"
 	eventCompletionStart eventType = "completion_start"
 	eventCompletionEnded eventType = "completion_ended"
@@ -84,6 +85,21 @@ func (e EventToolCall) getType() eventType { return eventToolCall }
 // NewEventToolCall creates a new EventToolCall
 func NewEventToolCall(callID, name string, arguments string) EventToolCall {
 	return EventToolCall{EventBase: EventBase{Content: arguments}, CallID: callID, Name: name}
+}
+
+// EventToolCallToken represents a tool call token event
+// Used for streaming. Not supported by some providers
+type EventToolCallToken struct {
+	EventBase
+	CallID string `json:"call_id"`
+	Name   string `json:"name"`
+}
+
+func (e EventToolCallToken) getType() eventType { return eventToolCallToken }
+
+// NewEventToolCallToken creates a new EventToolCallToken
+func NewEventToolCallToken(callID, name string, token string) EventToolCallToken {
+	return EventToolCallToken{EventBase: EventBase{Content: token}, CallID: callID, Name: name}
 }
 
 // EventError represents an error event

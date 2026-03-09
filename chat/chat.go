@@ -175,9 +175,23 @@ func (c *Chat) Session(ctx context.Context, client Client) <-chan StreamEvent {
 						state.approval.Attach(&event)
 						state.toolCalls = append(state.toolCalls, event)
 						state.lastToolCall = &state.toolCalls[len(state.toolCalls)-1]
+
+						// send tool call token
+						if !state.send(NewEventToolCallToken(event.CallID, event.Name, event.Content)) {
+							return
+						}
 					} else {
 						// add token to the last tool call
 						state.lastToolCall.Content += event.Content
+
+						callID := state.lastToolCall.CallID
+						name := state.lastToolCall.Name
+						token := event.Content
+
+						// send tool call token
+						if !state.send(NewEventToolCallToken(callID, name, token)) {
+							return
+						}
 					}
 				case EventRefusal:
 					c.AppendEvent(event)
