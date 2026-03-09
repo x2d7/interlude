@@ -27,9 +27,9 @@ c := chat.Chat{
 
 for event := range c.SendUserStream(ctx, &client, "Hello!") {
     switch v := event.(type) {
-    case chat.EventNewToken:
+    case chat.EventToken:
         fmt.Print(v.Content)
-    case chat.EventNewError:
+    case chat.EventError:
         log.Fatal(v.Error)
     }
 }
@@ -55,9 +55,9 @@ c := chat.Chat{
 
 for event := range c.SendUserStream(ctx, &client, "What's the weather in Berlin?") {
     switch v := event.(type) {
-    case chat.EventNewToken:
+    case chat.EventToken:
         fmt.Print(v.Content)
-    case chat.EventNewToolCall:
+    case chat.EventToolCall:
         v.Resolve(true) // approve the call
     case chat.EventCompletionEnded:
         fmt.Println()

@@ -24,24 +24,24 @@ type WriteFileInput struct {
 
 // Some models underuse tools without a concrete prior example to anchor on.
 func seedToolUsageExample(c *chat.Chat) {
-	c.Messages.AddEvent(chat.NewEventNewSystemMessage(
+	c.Messages.AddEvent(chat.NewEventSystemMessage(
 		`This is a tryout. Open the file "input.txt" and tell me what's inside.`,
 	))
 
-	exampleCall := chat.NewEventNewToolCall(
+	exampleCall := chat.NewEventToolCall(
 		"example-seed-call-1",
 		"read_file",
 		`{"path": "input.txt"}`,
 	)
 	c.Messages.AddEvent(exampleCall)
 
-	c.Messages.AddEvent(chat.NewEventNewToolMessage(
+	c.Messages.AddEvent(chat.NewEventToolMessage(
 		"example-seed-call-1",
 		"input.txt is not real ;(",
 		true,
 	))
 
-	c.Messages.AddEvent(chat.NewEventNewSystemMessage(
+	c.Messages.AddEvent(chat.NewEventSystemMessage(
 		`The was just an example on how to use tools. input.txt might be empty, don't worry. Try it yourself!`,
 	))
 }
@@ -87,14 +87,14 @@ func main() {
 	prompt := `Read the file "input.txt", then write its contents in uppercase to "output.txt".`
 	fmt.Printf("Prompt: %s\n\n", prompt)
 
-	pendingCalls := make([]chat.EventNewToolCall, 0)
+	pendingCalls := make([]chat.EventToolCall, 0)
 
 	for event := range c.SendUserStream(context.Background(), &client, prompt) {
 		switch v := event.(type) {
-		case chat.EventNewToken:
+		case chat.EventToken:
 			fmt.Print(v.Content)
 
-		case chat.EventNewToolCall:
+		case chat.EventToolCall:
 			pendingCalls = append(pendingCalls, v)
 
 		case chat.EventCompletionEnded:
@@ -112,7 +112,7 @@ func main() {
 			}
 			pendingCalls = pendingCalls[:0]
 
-		case chat.EventNewError:
+		case chat.EventError:
 			fmt.Fprintf(os.Stderr, "\nerror: %s\n", v.Error)
 			os.Exit(1)
 		}
