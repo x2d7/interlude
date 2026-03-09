@@ -138,8 +138,8 @@ type EventToolMessage struct {
 func (e EventToolMessage) GetType() eventType { return eventToolMessage }
 
 // NewEventToolMessage creates a new EventToolMessage
-func NewEventToolMessage(callId, content string, success bool) EventToolMessage {
-	return EventToolMessage{EventBase: EventBase{Content: content}, CallID: callId, Success: success}
+func NewEventToolMessage(callID, content string, success bool) EventToolMessage {
+	return EventToolMessage{EventBase: EventBase{Content: content}, CallID: callID, Success: success}
 }
 
 // EventRefusal represents a refusal event
