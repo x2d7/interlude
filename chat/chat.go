@@ -17,7 +17,7 @@ func (c *Chat) Complete(ctx context.Context, client Client) <-chan StreamEvent {
 		// text completion stream
 		stream := client.NewStreaming(ctx)
 		if stream == nil {
-			result <- NewEventNewError(ErrNilStreaming)
+			result <- NewEventError(ErrNilStreaming)
 			return
 		}
 		defer stream.Close()
@@ -33,7 +33,7 @@ func (c *Chat) Complete(ctx context.Context, client Client) <-chan StreamEvent {
 		}
 
 		if err := stream.Err(); err != nil {
-			result <- NewEventNewError(err)
+			result <- NewEventError(err)
 		}
 	}()
 
@@ -51,8 +51,8 @@ type sessionState struct {
 	// session state variables
 
 	builder      strings.Builder
-	toolCalls    []EventNewToolCall
-	lastToolCall *EventNewToolCall
+	toolCalls    []EventToolCall
+	lastToolCall *EventToolCall
 	approval     *ApproveWaiter
 }
 
@@ -135,7 +135,7 @@ func (c *Chat) Session(ctx context.Context, client Client) <-chan StreamEvent {
 				}
 
 				// flush last tool call if event type switched away from tool call stream
-				if _, isToolCall := ev.(EventNewToolCall); !isToolCall {
+				if _, isToolCall := ev.(EventToolCall); !isToolCall {
 					if !state.flushLastToolCall() {
 						return
 					}
@@ -146,9 +146,9 @@ func (c *Chat) Session(ctx context.Context, client Client) <-chan StreamEvent {
 
 				// collecting events
 				switch event := ev.(type) {
-				case EventNewToken:
+				case EventToken:
 					state.builder.WriteString(event.Content)
-				case EventNewToolCall:
+				case EventToolCall:
 					// prevent adding tool call immediately — we need to wait until end of completion
 					skipEvent = true
 					if event.CallID != "" {
@@ -163,7 +163,7 @@ func (c *Chat) Session(ctx context.Context, client Client) <-chan StreamEvent {
 						// add token to the last tool call
 						state.lastToolCall.Content += event.Content
 					}
-				case EventNewRefusal:
+				case EventRefusal:
 					c.AppendEvent(event)
 				}
 
@@ -186,7 +186,7 @@ func (c *Chat) Session(ctx context.Context, client Client) <-chan StreamEvent {
 func (c *Chat) handleCompletionEnd(ctx context.Context, state *sessionState) (proceed bool) {
 	// adding collected events to the chat (assistant's tokens and tool calls)
 	if state.builder.Len() != 0 {
-		c.AppendEvent(NewEventNewAssistantMessage(state.builder.String()))
+		c.AppendEvent(NewEventAssistantMessage(state.builder.String()))
 	}
 	for _, call := range state.toolCalls {
 		c.AppendEvent(call)
@@ -217,9 +217,9 @@ func (c *Chat) handleCompletionEnd(ctx context.Context, state *sessionState) (pr
 
 		if verdict.Accepted {
 			callResult, success := c.Tools.Execute(call.Name, call.Content)
-			c.AppendEvent(NewEventNewToolMessage(call.CallID, callResult, success))
+			c.AppendEvent(NewEventToolMessage(call.CallID, callResult, success))
 		} else {
-			c.AppendEvent(NewEventNewToolMessage(call.CallID, "User declined the tool call", false))
+			c.AppendEvent(NewEventToolMessage(call.CallID, "User declined the tool call", false))
 		}
 	}
 

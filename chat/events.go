@@ -1,54 +1,63 @@
 package chat
 
+import (
+	"encoding/json"
+	"errors"
+)
+
 // eventType represents the type of event
-type eventType uint
+type eventType string
 
 const (
 	// events produced by the text completion
 
-	eventNewToken eventType = iota
-	eventNewToolCall
-	eventNewRefusal
-	eventCompletionEnded
+	eventToken           eventType = "token"
+	eventToolCall        eventType = "tool_call"
+	eventRefusal         eventType = "refusal"
+	eventCompletionEnded eventType = "completion_ended"
 
 	// events produced by consumer
 
-	eventNewUserMessage
-	eventNewAssistantMessage
-	eventNewSystemMessage
-	eventNewToolMessage
+	eventUserMessage      eventType = "user_message"
+	eventAssistantMessage eventType = "assistant_message"
+	eventSystemMessage    eventType = "system_message"
+	eventToolMessage      eventType = "tool_message"
 
 	// error event
 
-	eventNewError
+	eventError eventType = "error"
 )
 
 // TODO: Добавить в будущем возможность класть метадату в события (учет стоимости, айди генерации)
-// TODO: Добавить возмжность добавлять Name к событиям
+// TODO: Добавить возмжность добавлять Name к событиям сообщений (четкое разделение отправителей)
 
 // EventBase is a base type for simple event types
 type EventBase struct {
-	Content string
+	Content string `json:"text"`
 }
 
-type EventCompletionEnded struct{} // TODO: можно добавлять список вызовов инструментов и другую информацию о генерации
+// EventCompletionEnded represents a completion ended event
+// TODO: добавить finish_reason
+// TODO: добавить список вызовов инструментов
+type EventCompletionEnded struct{}
 
-func (e EventCompletionEnded) GetType() eventType { return eventCompletionEnded }
+func (e EventCompletionEnded) getType() eventType { return eventCompletionEnded }
 
 func NewEventCompletionEnded() EventCompletionEnded {
 	return EventCompletionEnded{}
 }
 
-type EventNewToolCall struct {
+// EventToolCall represents a tool call event
+type EventToolCall struct {
 	EventBase
-	CallID string
-	Name   string
+	CallID string `json:"call_id"`
+	Name   string `json:"name"`
 
 	approval *ApproveWaiter
 	answered bool
 }
 
-func (e *EventNewToolCall) Resolve(accept bool) {
+func (e *EventToolCall) Resolve(accept bool) {
 	if e.answered {
 		return
 	}
@@ -60,101 +69,146 @@ func (e *EventNewToolCall) Resolve(accept bool) {
 	e.approval.Resolve(verdict)
 }
 
-func (e EventNewToolCall) GetType() eventType { return eventNewToolCall }
+func (e EventToolCall) getType() eventType { return eventToolCall }
 
-// NewEventNewToolCall creates a new EventNewToolCall
-func NewEventNewToolCall(callID, name string, arguments string) EventNewToolCall {
-	return EventNewToolCall{EventBase: EventBase{Content: arguments}, CallID: callID, Name: name}
+// NewEventToolCall creates a new EventToolCall
+func NewEventToolCall(callID, name string, arguments string) EventToolCall {
+	return EventToolCall{EventBase: EventBase{Content: arguments}, CallID: callID, Name: name}
 }
 
-// EventNewError represents a new error event
-type EventNewError struct {
+// EventError represents an error event
+type EventError struct {
 	Error error
 }
 
-func (e EventNewError) GetType() eventType { return eventNewError }
-
-// NewEventNewError creates a new EventNewError
-func NewEventNewError(err error) EventNewError {
-	return EventNewError{Error: err}
+func (e EventError) MarshalJSON() ([]byte, error) {
+	return json.Marshal(struct {
+		Message string `json:"error"`
+	}{
+		Message: e.Error.Error(),
+	})
 }
 
-// EventNewToken represents a new token event
-type EventNewToken struct {
+func (e *EventError) UnmarshalJSON(data []byte) error {
+	var v struct {
+		Message string `json:"error"`
+	}
+	if err := json.Unmarshal(data, &v); err != nil {
+		return err
+	}
+	e.Error = errors.New(v.Message)
+	return nil
+}
+
+func (e EventError) getType() eventType { return eventError }
+
+// NewEventError creates a new EventError
+func NewEventError(err error) EventError {
+	return EventError{Error: err}
+}
+
+// EventToken represents a token event
+type EventToken struct {
 	EventBase
 }
 
-func (e EventNewToken) GetType() eventType { return eventNewToken }
+func (e EventToken) getType() eventType { return eventToken }
 
-// NewEventNewToken creates a new EventNewToken
-func NewEventNewToken(content string) EventNewToken {
-	return EventNewToken{EventBase: EventBase{Content: content}}
+// NewEventToken creates a new EventToken
+func NewEventToken(content string) EventToken {
+	return EventToken{EventBase: EventBase{Content: content}}
 }
 
-// EventNewUserMessage represents a new user message event
-type EventNewUserMessage struct {
+// EventUserMessage represents a user message event
+type EventUserMessage struct {
 	EventBase
 }
 
-func (e EventNewUserMessage) GetType() eventType { return eventNewUserMessage }
+func (e EventUserMessage) getType() eventType { return eventUserMessage }
 
-// NewEventNewUserMessage creates a new EventNewUserMessage
-func NewEventNewUserMessage(content string) EventNewUserMessage {
-	return EventNewUserMessage{EventBase: EventBase{Content: content}}
+// NewEventUserMessage creates a new EventUserMessage
+func NewEventUserMessage(content string) EventUserMessage {
+	return EventUserMessage{EventBase: EventBase{Content: content}}
 }
 
-// EventNewAssistantMessage represents a new assistant message event
-type EventNewAssistantMessage struct {
+// EventAssistantMessage represents an assistant message event
+type EventAssistantMessage struct {
 	EventBase
 }
 
-func (e EventNewAssistantMessage) GetType() eventType { return eventNewAssistantMessage }
+func (e EventAssistantMessage) getType() eventType { return eventAssistantMessage }
 
-// NewEventNewAssistantMessage creates a new EventNewAssistantMessage
-func NewEventNewAssistantMessage(content string) EventNewAssistantMessage {
-	return EventNewAssistantMessage{EventBase: EventBase{Content: content}}
+// NewEventAssistantMessage creates a new EventAssistantMessage
+func NewEventAssistantMessage(content string) EventAssistantMessage {
+	return EventAssistantMessage{EventBase: EventBase{Content: content}}
 }
 
-// EventNewSystemMessage represents a new system message event
-type EventNewSystemMessage struct {
+// EventSystemMessage represents a system message event
+type EventSystemMessage struct {
 	EventBase
 }
 
-func (e EventNewSystemMessage) GetType() eventType { return eventNewSystemMessage }
+func (e EventSystemMessage) getType() eventType { return eventSystemMessage }
 
-// NewEventNewSystemMessage creates a new EventNewSystemMessage
-func NewEventNewSystemMessage(content string) EventNewSystemMessage {
-	return EventNewSystemMessage{EventBase: EventBase{Content: content}}
+// NewEventSystemMessage creates a new EventSystemMessage
+func NewEventSystemMessage(content string) EventSystemMessage {
+	return EventSystemMessage{EventBase: EventBase{Content: content}}
 }
 
-// EventNewToolMessage represents a new tool message event
-type EventNewToolMessage struct {
+// EventToolMessage represents a tool message event
+type EventToolMessage struct {
 	EventBase
-	// CallID is the ID of the tool call request that was previously sent by assistant
-	CallID  string
-	Success bool
+	CallID  string `json:"call_id"`
+	Success bool   `json:"success"`
 }
 
-func (e EventNewToolMessage) GetType() eventType { return eventNewToolMessage }
+func (e EventToolMessage) getType() eventType { return eventToolMessage }
 
-// NewEventNewToolMessage creates a new EventNewToolMessage
-func NewEventNewToolMessage(callId, content string, success bool) EventNewToolMessage {
-	return EventNewToolMessage{EventBase: EventBase{Content: content}, CallID: callId, Success: success}
+// NewEventToolMessage creates a new EventToolMessage
+func NewEventToolMessage(callID, content string, success bool) EventToolMessage {
+	return EventToolMessage{EventBase: EventBase{Content: content}, CallID: callID, Success: success}
 }
 
-// EventNewRefusal represents a new refusal event
-type EventNewRefusal struct {
+// EventRefusal represents a refusal event
+type EventRefusal struct {
 	EventBase
 }
 
-func (e EventNewRefusal) GetType() eventType { return eventNewRefusal }
+func (e EventRefusal) getType() eventType { return eventRefusal }
 
-// NewEventNewRefusal creates a new EventNewRefusal
-func NewEventNewRefusal(content string) EventNewRefusal {
-	return EventNewRefusal{EventBase: EventBase{Content: content}}
+// NewEventRefusal creates a new EventRefusal
+func NewEventRefusal(content string) EventRefusal {
+	return EventRefusal{EventBase: EventBase{Content: content}}
 }
 
 // StreamEvent represents a stream event
 type StreamEvent interface {
-	GetType() eventType
+	getType() eventType
 }
+
+// Deprecated: Use EventToken instead.
+type EventNewToken = EventToken
+
+// Deprecated: Use EventToolCall instead.
+type EventNewToolCall = EventToolCall
+
+// Deprecated: Use EventToolMessage instead.
+type EventNewToolMessage = EventToolMessage
+
+// Deprecated: Use EventRefusal instead.
+type EventNewRefusal = EventRefusal
+
+// Deprecated: Use EventCompletionEnded instead.
+type EventNewCompletionEnded = EventCompletionEnded
+
+// Deprecated: Use EventError instead.
+type EventNewError = EventError
+
+// Deprecated: Use EventUserMessage instead.
+type EventNewUserMessage = EventUserMessage
+
+// Deprecated: Use EventAssistantMessage instead.
+type EventNewAssistantMessage = EventAssistantMessage
+
+// Deprecated: Use EventSystemMessage instead.
+type EventNewSystemMessage = EventSystemMessage

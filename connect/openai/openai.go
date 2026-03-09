@@ -71,20 +71,20 @@ func (m *openAIMessages) Add(event chat.StreamEvent) {
 	var message openai.ChatCompletionMessageParamUnion
 
 	switch e := event.(type) {
-	case chat.EventNewAssistantMessage:
+	case chat.EventAssistantMessage:
 		message = openai.AssistantMessage(e.Content)
-	case chat.EventNewRefusal:
+	case chat.EventRefusal:
 		refusal := openai.ChatCompletionContentPartRefusalParam{Refusal: e.Content}
 		contentUnion := make([]openai.ChatCompletionAssistantMessageParamContentArrayOfContentPartUnion, 0)
 		contentUnion = append(contentUnion,
 			openai.ChatCompletionAssistantMessageParamContentArrayOfContentPartUnion{OfRefusal: &refusal},
 		)
 		message = openai.AssistantMessage(contentUnion)
-	case chat.EventNewSystemMessage:
+	case chat.EventSystemMessage:
 		message = openai.SystemMessage(e.Content)
-	case chat.EventNewUserMessage:
+	case chat.EventUserMessage:
 		message = openai.UserMessage(e.Content)
-	case chat.EventNewToolCall:
+	case chat.EventToolCall:
 		messagePtr := m.findLastAssistantMessage()
 		if messagePtr == nil {
 			message = openai.AssistantMessage(" ")
@@ -107,7 +107,7 @@ func (m *openAIMessages) Add(event chat.StreamEvent) {
 		}
 		messagePtr.OfAssistant.ToolCalls = append(messagePtr.OfAssistant.ToolCalls, toolCalls...)
 
-	case chat.EventNewToolMessage:
+	case chat.EventToolMessage:
 		message = openai.ToolMessage(e.Content, e.CallID)
 	}
 
