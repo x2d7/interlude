@@ -86,9 +86,6 @@ func (c *Chat) Session(ctx context.Context, client Client) <-chan StreamEvent {
 	// ensuring default values
 	c.ensureDefaults()
 
-	// insert chat context into client input configuration
-	client = client.SyncInput(c)
-
 	// creating the channels
 	result := make(chan StreamEvent, 16)
 
@@ -115,14 +112,27 @@ func (c *Chat) Session(ctx context.Context, client Client) <-chan StreamEvent {
 
 		// session state
 		state := &sessionState{
-			client: client,
-			events: c.Complete(ctx, client),
-			send:   send,
-			ctx:    ctx,
+			send: send,
+			ctx:  ctx,
 		}
-		state.reset()
+
+		// flag to start completion this iteration
+		doStartCompletion := true
 
 		for {
+			if doStartCompletion {
+				// reset state
+				state.reset()
+
+				// insert chat context into client input configuration
+				client := client.SyncInput(c)
+				state.client = client
+
+				// start completion
+				state.events = c.Complete(ctx, client)
+				doStartCompletion = false
+			}
+
 			select {
 			case <-ctx.Done():
 				return
@@ -131,6 +141,7 @@ func (c *Chat) Session(ctx context.Context, client Client) <-chan StreamEvent {
 					if !c.handleCompletionEnd(ctx, state) {
 						return
 					}
+					doStartCompletion = true
 					continue
 				}
 
@@ -222,13 +233,6 @@ func (c *Chat) handleCompletionEnd(ctx context.Context, state *sessionState) (pr
 			c.AppendEvent(NewEventToolMessage(call.CallID, "User declined the tool call", false))
 		}
 	}
-
-	// reset state
-	state.reset()
-
-	// resume text completion
-	state.client = state.client.SyncInput(c)
-	state.events = c.Complete(ctx, state.client)
 
 	return true
 }
