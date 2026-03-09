@@ -158,3 +158,30 @@ func NewEventRefusal(content string) EventRefusal {
 type StreamEvent interface {
 	GetType() eventType
 }
+
+// Deprecated: Use EventToken instead.
+type EventNewToken = EventToken
+
+// Deprecated: Use EventToolCall instead.
+type EventNewToolCall = EventToolCall
+
+// Deprecated: Use EventToolMessage instead.
+type EventNewToolMessage = EventToolMessage
+
+// Deprecated: Use EventRefusal instead.
+type EventNewRefusal = EventRefusal
+
+// Deprecated: Use EventCompletionEnded instead.
+type EventNewCompletionEnded = EventCompletionEnded
+
+// Deprecated: Use EventError instead.
+type EventNewError = EventError
+
+// Deprecated: Use EventUserMessage instead.
+type EventNewUserMessage = EventUserMessage
+
+// Deprecated: Use EventAssistantMessage instead.
+type EventNewAssistantMessage = EventAssistantMessage
+
+// Deprecated: Use EventSystemMessage instead.
+type EventNewSystemMessage = EventSystemMessage
