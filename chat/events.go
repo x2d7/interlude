@@ -14,6 +14,7 @@ const (
 	eventToken           eventType = "token"
 	eventToolCall        eventType = "tool_call"
 	eventRefusal         eventType = "refusal"
+	eventCompletionStart eventType = "completion_start"
 	eventCompletionEnded eventType = "completion_ended"
 
 	// events produced by consumer
@@ -34,6 +35,15 @@ const (
 // EventBase is a base type for simple event types
 type EventBase struct {
 	Content string `json:"text"`
+}
+
+// EventCompletionStart represents a completion start event
+type EventCompletionStart struct{}
+
+func (e EventCompletionStart) getType() eventType { return eventCompletionStart }
+
+func NewEventCompletionStart() EventCompletionStart {
+	return EventCompletionStart{}
 }
 
 // EventCompletionEnded represents a completion ended event
