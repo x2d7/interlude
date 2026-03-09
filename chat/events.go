@@ -1,26 +1,26 @@
 package chat
 
 // eventType represents the type of event
-type eventType uint
+type eventType string
 
 const (
 	// events produced by the text completion
 
-	eventToken eventType = iota
-	eventToolCall
-	eventRefusal
-	eventCompletionEnded
+	eventToken           eventType = "token"
+	eventToolCall        eventType = "tool_call"
+	eventRefusal         eventType = "refusal"
+	eventCompletionEnded eventType = "completion_ended"
 
 	// events produced by consumer
 
-	eventUserMessage
-	eventAssistantMessage
-	eventSystemMessage
-	eventToolMessage
+	eventUserMessage      eventType = "user_message"
+	eventAssistantMessage eventType = "assistant_message"
+	eventSystemMessage    eventType = "system_message"
+	eventToolMessage      eventType = "tool_message"
 
 	// error event
 
-	eventError
+	eventError eventType = "error"
 )
 
 // TODO: Добавить в будущем возможность класть метадату в события (учет стоимости, айди генерации)
