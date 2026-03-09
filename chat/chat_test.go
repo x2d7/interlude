@@ -170,11 +170,11 @@ func TestComplete_SuccessTokens(t *testing.T) {
 	}
 
 	// Verify token content
-	if received[0].GetType() != eventToken {
-		t.Errorf("Expected EventToken, got %v", received[0].GetType())
+	if received[0].getType() != eventToken {
+		t.Errorf("Expected EventToken, got %v", received[0].getType())
 	}
-	if received[1].GetType() != eventToken {
-		t.Errorf("Expected EventToken, got %v", received[1].GetType())
+	if received[1].getType() != eventToken {
+		t.Errorf("Expected EventToken, got %v", received[1].getType())
 	}
 }
 
@@ -339,8 +339,8 @@ func TestSyncInput_WithNewMessages(t *testing.T) {
 		t.Fatalf("Expected 1 message, got %d", len(messages))
 	}
 
-	if messages[0].GetType() != eventUserMessage {
-		t.Errorf("Expected EventUserMessage, got %v", messages[0].GetType())
+	if messages[0].getType() != eventUserMessage {
+		t.Errorf("Expected EventUserMessage, got %v", messages[0].getType())
 	}
 }
 
@@ -418,7 +418,7 @@ func TestSession_CollectsTokens(t *testing.T) {
 	var tokenCount int
 	var tokenContent string
 	for _, msg := range messages {
-		if msg.GetType() == eventAssistantMessage {
+		if msg.getType() == eventAssistantMessage {
 			tokenCount++
 			tokenContent = msg.(EventAssistantMessage).Content
 		}
@@ -465,7 +465,7 @@ func TestSession_CollectsToolCalls(t *testing.T) {
 	messages := chat.Messages.Snapshot()
 	var toolCallCount int
 	for _, msg := range messages {
-		if msg.GetType() == eventToolCall {
+		if msg.getType() == eventToolCall {
 			toolCallCount++
 		}
 	}
@@ -493,7 +493,7 @@ func TestSession_EmitsCompletionEnded(t *testing.T) {
 
 	var receivedCompletion bool
 	for event := range events {
-		if event.GetType() == eventCompletionEnded {
+		if event.getType() == eventCompletionEnded {
 			receivedCompletion = true
 			break
 		}
@@ -534,7 +534,7 @@ func TestSession_Refusal(t *testing.T) {
 
 	var refusalCount int
 	for _, msg := range messages {
-		if msg.GetType() == eventRefusal {
+		if msg.getType() == eventRefusal {
 			refusalCount++
 		}
 	}
@@ -590,7 +590,7 @@ func TestSession_ToolAccepted(t *testing.T) {
 
 	var toolResultFound bool
 	for _, msg := range messages {
-		if msg.GetType() == eventToolMessage {
+		if msg.getType() == eventToolMessage {
 			toolMsg := msg.(EventToolMessage)
 			if toolMsg.CallID == "call-1" && toolMsg.Success {
 				toolResultFound = true
@@ -646,7 +646,7 @@ func TestSession_ToolRejected(t *testing.T) {
 
 	var rejectionFound bool
 	for _, msg := range messages {
-		if msg.GetType() == eventToolMessage {
+		if msg.getType() == eventToolMessage {
 			toolMsg := msg.(EventToolMessage)
 			if toolMsg.CallID == "call-1" && !toolMsg.Success &&
 				toolMsg.Content == "User declined the tool call" {
@@ -694,7 +694,7 @@ func TestSession_NonExistentTool(t *testing.T) {
 
 	var errorFound bool
 	for _, msg := range messages {
-		if msg.GetType() == eventToolMessage {
+		if msg.getType() == eventToolMessage {
 			toolMsg := msg.(EventToolMessage)
 			if toolMsg.CallID == "call-1" && !toolMsg.Success {
 				errorFound = true
@@ -740,14 +740,14 @@ func TestHelpers_AddMessage(t *testing.T) {
 		t.Fatalf("Expected 3 messages, got %d", len(messages))
 	}
 
-	if messages[0].GetType() != eventUserMessage {
-		t.Errorf("Expected EventUserMessage, got %v", messages[0].GetType())
+	if messages[0].getType() != eventUserMessage {
+		t.Errorf("Expected EventUserMessage, got %v", messages[0].getType())
 	}
-	if messages[1].GetType() != eventAssistantMessage {
-		t.Errorf("Expected EventAssistantMessage, got %v", messages[1].GetType())
+	if messages[1].getType() != eventAssistantMessage {
+		t.Errorf("Expected EventAssistantMessage, got %v", messages[1].getType())
 	}
-	if messages[2].GetType() != eventSystemMessage {
-		t.Errorf("Expected EventSystemMessage, got %v", messages[2].GetType())
+	if messages[2].getType() != eventSystemMessage {
+		t.Errorf("Expected EventSystemMessage, got %v", messages[2].getType())
 	}
 }
 
@@ -766,8 +766,8 @@ func TestHelpers_AppendEvent(t *testing.T) {
 		t.Fatalf("Expected 1 message, got %d", len(messages))
 	}
 
-	if messages[0].GetType() != eventToken {
-		t.Errorf("Expected EventToken, got %v", messages[0].GetType())
+	if messages[0].getType() != eventToken {
+		t.Errorf("Expected EventToken, got %v", messages[0].getType())
 	}
 }
 
@@ -792,8 +792,8 @@ func TestHelpers_SendUserStream(t *testing.T) {
 		t.Fatalf("Expected 1 message, got %d", len(messages))
 	}
 
-	if messages[0].GetType() != eventUserMessage {
-		t.Errorf("Expected EventUserMessage, got %v", messages[0].GetType())
+	if messages[0].getType() != eventUserMessage {
+		t.Errorf("Expected EventUserMessage, got %v", messages[0].getType())
 	}
 
 	// Drain events
@@ -824,8 +824,8 @@ func TestHelpers_SendAssistantStream(t *testing.T) {
 		t.Fatalf("Expected 1 message, got %d", len(messages))
 	}
 
-	if messages[0].GetType() != eventAssistantMessage {
-		t.Errorf("Expected EventAssistantMessage, got %v", messages[0].GetType())
+	if messages[0].getType() != eventAssistantMessage {
+		t.Errorf("Expected EventAssistantMessage, got %v", messages[0].getType())
 	}
 
 	// Drain events
@@ -856,8 +856,8 @@ func TestHelpers_SendSystemStream(t *testing.T) {
 		t.Fatalf("Expected 1 message, got %d", len(messages))
 	}
 
-	if messages[0].GetType() != eventSystemMessage {
-		t.Errorf("Expected EventSystemMessage, got %v", messages[0].GetType())
+	if messages[0].getType() != eventSystemMessage {
+		t.Errorf("Expected EventSystemMessage, got %v", messages[0].getType())
 	}
 
 	// Drain events
@@ -891,8 +891,8 @@ func TestComplete_ContextCancelledDuringStream(t *testing.T) {
 
 	// Receive first event
 	event1 := <-result
-	if event1.GetType() != eventToken {
-		t.Errorf("Expected first event to be token, got %v", event1.GetType())
+	if event1.getType() != eventToken {
+		t.Errorf("Expected first event to be token, got %v", event1.getType())
 	}
 
 	// Cancel context
@@ -904,7 +904,7 @@ func TestComplete_ContextCancelledDuringStream(t *testing.T) {
 	// Drain remaining events - after cancellation there should be no more
 	// because the channel is closed after all events are processed
 	for event := range result {
-		t.Logf("Got event after cancellation: %v", event.GetType())
+		t.Logf("Got event after cancellation: %v", event.getType())
 	}
 }
 
@@ -928,7 +928,7 @@ func TestSession_ContextCancelledDuringTokenCollection(t *testing.T) {
 	// Receive first token event
 	var receivedToken bool
 	for event := range result {
-		if event.GetType() == eventToken {
+		if event.getType() == eventToken {
 			receivedToken = true
 			break
 		}
@@ -990,7 +990,7 @@ func TestSession_ContextCancelledWhileWaitingForApproval(t *testing.T) {
 	messages := chat.Messages.Snapshot()
 	toolExecuted := false
 	for _, msg := range messages {
-		if msg.GetType() == eventToolMessage {
+		if msg.getType() == eventToolMessage {
 			toolExecuted = true
 			break
 		}
@@ -1045,7 +1045,7 @@ func TestSession_ContextCancelledBetweenRounds(t *testing.T) {
 	messages := chat.Messages.Snapshot()
 	toolMessageCount := 0
 	for _, msg := range messages {
-		if msg.GetType() == eventToolMessage {
+		if msg.getType() == eventToolMessage {
 			toolMessageCount++
 		}
 	}
@@ -1408,7 +1408,7 @@ func TestSession_MixedTokensAndToolCalls(t *testing.T) {
 	messages := chat.Messages.Snapshot()
 	toolCallsInHistory := 0
 	for _, msg := range messages {
-		if msg.GetType() == eventToolCall {
+		if msg.getType() == eventToolCall {
 			toolCallsInHistory++
 		}
 	}

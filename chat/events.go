@@ -33,7 +33,7 @@ type EventBase struct {
 
 type EventCompletionEnded struct{} // TODO: можно добавлять список вызовов инструментов и другую информацию о генерации
 
-func (e EventCompletionEnded) GetType() eventType { return eventCompletionEnded }
+func (e EventCompletionEnded) getType() eventType { return eventCompletionEnded }
 
 func NewEventCompletionEnded() EventCompletionEnded {
 	return EventCompletionEnded{}
@@ -60,7 +60,7 @@ func (e *EventToolCall) Resolve(accept bool) {
 	e.approval.Resolve(verdict)
 }
 
-func (e EventToolCall) GetType() eventType { return eventToolCall }
+func (e EventToolCall) getType() eventType { return eventToolCall }
 
 // NewEventToolCall creates a new EventToolCall
 func NewEventToolCall(callID, name string, arguments string) EventToolCall {
@@ -72,7 +72,7 @@ type EventError struct {
 	Error error
 }
 
-func (e EventError) GetType() eventType { return eventError }
+func (e EventError) getType() eventType { return eventError }
 
 // NewEventError creates a new EventError
 func NewEventError(err error) EventError {
@@ -84,7 +84,7 @@ type EventToken struct {
 	EventBase
 }
 
-func (e EventToken) GetType() eventType { return eventToken }
+func (e EventToken) getType() eventType { return eventToken }
 
 // NewEventToken creates a new EventToken
 func NewEventToken(content string) EventToken {
@@ -96,7 +96,7 @@ type EventUserMessage struct {
 	EventBase
 }
 
-func (e EventUserMessage) GetType() eventType { return eventUserMessage }
+func (e EventUserMessage) getType() eventType { return eventUserMessage }
 
 // NewEventUserMessage creates a new EventUserMessage
 func NewEventUserMessage(content string) EventUserMessage {
@@ -108,7 +108,7 @@ type EventAssistantMessage struct {
 	EventBase
 }
 
-func (e EventAssistantMessage) GetType() eventType { return eventAssistantMessage }
+func (e EventAssistantMessage) getType() eventType { return eventAssistantMessage }
 
 // NewEventAssistantMessage creates a new EventAssistantMessage
 func NewEventAssistantMessage(content string) EventAssistantMessage {
@@ -120,7 +120,7 @@ type EventSystemMessage struct {
 	EventBase
 }
 
-func (e EventSystemMessage) GetType() eventType { return eventSystemMessage }
+func (e EventSystemMessage) getType() eventType { return eventSystemMessage }
 
 // NewEventSystemMessage creates a new EventSystemMessage
 func NewEventSystemMessage(content string) EventSystemMessage {
@@ -135,7 +135,7 @@ type EventToolMessage struct {
 	Success bool
 }
 
-func (e EventToolMessage) GetType() eventType { return eventToolMessage }
+func (e EventToolMessage) getType() eventType { return eventToolMessage }
 
 // NewEventToolMessage creates a new EventToolMessage
 func NewEventToolMessage(callID, content string, success bool) EventToolMessage {
@@ -147,7 +147,7 @@ type EventRefusal struct {
 	EventBase
 }
 
-func (e EventRefusal) GetType() eventType { return eventRefusal }
+func (e EventRefusal) getType() eventType { return eventRefusal }
 
 // NewEventRefusal creates a new EventRefusal
 func NewEventRefusal(content string) EventRefusal {
@@ -156,7 +156,7 @@ func NewEventRefusal(content string) EventRefusal {
 
 // StreamEvent represents a stream event
 type StreamEvent interface {
-	GetType() eventType
+	getType() eventType
 }
 
 // Deprecated: Use EventToken instead.
