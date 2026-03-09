@@ -117,10 +117,10 @@ func (c *Chat) Session(ctx context.Context, client Client) <-chan StreamEvent {
 		}
 
 		// flag to start completion this iteration
-		doStartCompletion := true
+		restart := true
 
 		for {
-			if doStartCompletion {
+			if restart {
 				// reset state
 				state.reset()
 
@@ -130,7 +130,7 @@ func (c *Chat) Session(ctx context.Context, client Client) <-chan StreamEvent {
 
 				// start completion
 				state.events = c.Complete(ctx, client)
-				doStartCompletion = false
+				restart = false
 			}
 
 			select {
@@ -141,7 +141,7 @@ func (c *Chat) Session(ctx context.Context, client Client) <-chan StreamEvent {
 					if !c.handleCompletionEnd(ctx, state) {
 						return
 					}
-					doStartCompletion = true
+					restart = true
 					continue
 				}
 
