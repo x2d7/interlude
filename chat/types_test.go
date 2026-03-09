@@ -26,7 +26,7 @@ func TestNewMessages(t *testing.T) {
 
 func TestMessages_AddEvent_Single(t *testing.T) {
 	m := NewMessages()
-	event := NewEventNewUserMessage("Hello")
+	event := NewEventUserMessage("Hello")
 
 	m.AddEvent(event)
 
@@ -37,9 +37,9 @@ func TestMessages_AddEvent_Single(t *testing.T) {
 
 func TestMessages_AddEvent_Multiple(t *testing.T) {
 	m := NewMessages()
-	event1 := NewEventNewUserMessage("Hello")
-	event2 := NewEventNewAssistantMessage("Hi there")
-	event3 := NewEventNewToken("test")
+	event1 := NewEventUserMessage("Hello")
+	event2 := NewEventAssistantMessage("Hi there")
+	event3 := NewEventToken("test")
 
 	m.AddEvent(event1)
 	m.AddEvent(event2)
@@ -59,7 +59,7 @@ func TestMessages_AddEvent_Concurrent(t *testing.T) {
 		wg.Add(1)
 		go func(n int) {
 			defer wg.Done()
-			m.AddEvent(NewEventNewToken("token"))
+			m.AddEvent(NewEventToken("token"))
 		}(i)
 	}
 
@@ -81,14 +81,14 @@ func TestMessages_Snapshot_Empty(t *testing.T) {
 
 func TestMessages_Snapshot_ReturnsCopy(t *testing.T) {
 	m := NewMessages()
-	originalEvent := NewEventNewUserMessage("Original")
+	originalEvent := NewEventUserMessage("Original")
 	m.AddEvent(originalEvent)
 
 	// Get snapshot
 	snapshot1 := m.Snapshot()
 
 	// Modify original
-	m.AddEvent(NewEventNewUserMessage("Modified"))
+	m.AddEvent(NewEventUserMessage("Modified"))
 
 	// Get another snapshot
 	snapshot2 := m.Snapshot()
@@ -106,7 +106,7 @@ func TestMessages_Snapshot_ReturnsCopy(t *testing.T) {
 
 func TestMessages_Snapshot_ModifyCopyDoesNotAffectOriginal(t *testing.T) {
 	m := NewMessages()
-	event := NewEventNewUserMessage("Test")
+	event := NewEventUserMessage("Test")
 	m.AddEvent(event)
 
 	// Get snapshot
@@ -115,7 +115,7 @@ func TestMessages_Snapshot_ModifyCopyDoesNotAffectOriginal(t *testing.T) {
 	// Modify snapshot directly (bypass AddEvent to test internal copy)
 	// Since we can't modify the slice directly (it's a value type),
 	// we verify the original is not affected by adding more events
-	m.AddEvent(NewEventNewUserMessage("Another"))
+	m.AddEvent(NewEventUserMessage("Another"))
 
 	if len(snapshot) != 1 {
 		t.Fatalf("Expected snapshot to still have 1 event, got %d", len(snapshot))
@@ -140,7 +140,7 @@ func TestNewApproveWaiter(t *testing.T) {
 }
 
 func TestApproveWaiter_Attach(t *testing.T) {
-	event := NewEventNewToolCall("call-id", "tool-name", `{"arg": "value"}`)
+	event := NewEventToolCall("call-id", "tool-name", `{"arg": "value"}`)
 
 	ctx := context.Background()
 	w := NewApproveWaiter(ctx)
@@ -275,7 +275,7 @@ func TestApproveWaiter_Resolve_AcceptFalse(t *testing.T) {
 }
 
 func TestEventNewToolCall_Resolve_NoApproval(t *testing.T) {
-	event := NewEventNewToolCall("call-id", "tool-name", `{}`)
+	event := NewEventToolCall("call-id", "tool-name", `{}`)
 
 	// Should not panic when called without approval attached
 	event.Resolve(true)
@@ -284,7 +284,7 @@ func TestEventNewToolCall_Resolve_NoApproval(t *testing.T) {
 func TestEventNewToolCall_Resolve_DoubleCall(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	w := NewApproveWaiter(ctx)
-	event := NewEventNewToolCall("call-id", "tool-name", `{}`)
+	event := NewEventToolCall("call-id", "tool-name", `{}`)
 
 	w.Attach(&event)
 

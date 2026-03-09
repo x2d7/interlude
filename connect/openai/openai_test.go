@@ -100,7 +100,7 @@ func TestFindLastAssistantMessage_MultipleAssistant_ReturnsLast(t *testing.T) {
 
 func TestOpenAIMessages_Add_AssistantMessage(t *testing.T) {
 	m := openAIMessages{}
-	m.Add(chat.NewEventNewAssistantMessage("Hello, I am an assistant"))
+	m.Add(chat.NewEventAssistantMessage("Hello, I am an assistant"))
 
 	if len(m) != 1 {
 		t.Fatalf("Expected 1 message, got %d", len(m))
@@ -112,7 +112,7 @@ func TestOpenAIMessages_Add_AssistantMessage(t *testing.T) {
 
 func TestOpenAIMessages_Add_SystemMessage(t *testing.T) {
 	m := openAIMessages{}
-	m.Add(chat.NewEventNewSystemMessage("You are a helpful assistant"))
+	m.Add(chat.NewEventSystemMessage("You are a helpful assistant"))
 
 	if len(m) != 1 {
 		t.Fatalf("Expected 1 message, got %d", len(m))
@@ -124,7 +124,7 @@ func TestOpenAIMessages_Add_SystemMessage(t *testing.T) {
 
 func TestOpenAIMessages_Add_UserMessage(t *testing.T) {
 	m := openAIMessages{}
-	m.Add(chat.NewEventNewUserMessage("Hello"))
+	m.Add(chat.NewEventUserMessage("Hello"))
 
 	if len(m) != 1 {
 		t.Fatalf("Expected 1 message, got %d", len(m))
@@ -136,7 +136,7 @@ func TestOpenAIMessages_Add_UserMessage(t *testing.T) {
 
 func TestOpenAIMessages_Add_Refusal(t *testing.T) {
 	m := openAIMessages{}
-	m.Add(chat.NewEventNewRefusal("I cannot help with that"))
+	m.Add(chat.NewEventRefusal("I cannot help with that"))
 
 	if len(m) != 1 {
 		t.Fatalf("Expected 1 message, got %d", len(m))
@@ -148,7 +148,7 @@ func TestOpenAIMessages_Add_Refusal(t *testing.T) {
 
 func TestOpenAIMessages_Add_ToolMessage(t *testing.T) {
 	m := openAIMessages{}
-	event := chat.NewEventNewToolMessage("call-id", "result content", true)
+	event := chat.NewEventToolMessage("call-id", "result content", true)
 	m.Add(event)
 
 	if len(m) != 1 {
@@ -162,7 +162,7 @@ func TestOpenAIMessages_Add_ToolMessage(t *testing.T) {
 func TestOpenAIMessages_Add_ToolCall_NoExistingAssistant(t *testing.T) {
 	m := openAIMessages{}
 	// No prior assistant message — should create a new assistant message
-	event := chat.NewEventNewToolCall("call-1", "my_tool", `{"arg": "val"}`)
+	event := chat.NewEventToolCall("call-1", "my_tool", `{"arg": "val"}`)
 	m.Add(event)
 
 	// Should have one assistant message with the tool call
@@ -190,9 +190,9 @@ func TestOpenAIMessages_Add_ToolCall_NoExistingAssistant(t *testing.T) {
 func TestOpenAIMessages_Add_ToolCall_WithExistingAssistant(t *testing.T) {
 	m := openAIMessages{}
 	// Add an existing assistant message first
-	m.Add(chat.NewEventNewAssistantMessage("I'll call a tool"))
+	m.Add(chat.NewEventAssistantMessage("I'll call a tool"))
 
-	event := chat.NewEventNewToolCall("call-1", "my_tool", `{}`)
+	event := chat.NewEventToolCall("call-1", "my_tool", `{}`)
 	m.Add(event)
 
 	// Should still be 1 message (tool call appended to existing assistant)
@@ -206,8 +206,8 @@ func TestOpenAIMessages_Add_ToolCall_WithExistingAssistant(t *testing.T) {
 
 func TestOpenAIMessages_Add_TwoToolCalls_MergedIntoOneAssistant(t *testing.T) {
 	m := openAIMessages{}
-	m.Add(chat.NewEventNewToolCall("call-1", "tool_a", `{}`))
-	m.Add(chat.NewEventNewToolCall("call-2", "tool_b", `{}`))
+	m.Add(chat.NewEventToolCall("call-1", "tool_a", `{}`))
+	m.Add(chat.NewEventToolCall("call-2", "tool_b", `{}`))
 
 	// Both tool calls should be merged into one assistant message
 	if len(m) != 1 {
@@ -221,7 +221,7 @@ func TestOpenAIMessages_Add_TwoToolCalls_MergedIntoOneAssistant(t *testing.T) {
 func TestOpenAIMessages_Add_UnknownEventType_NoMessageAdded(t *testing.T) {
 	m := openAIMessages{}
 	// EventNewToken is not handled in Add — should be silently ignored
-	m.Add(chat.NewEventNewToken("some token"))
+	m.Add(chat.NewEventToken("some token"))
 
 	if len(m) != 0 {
 		t.Errorf("Expected 0 messages for unknown event type, got %d", len(m))
@@ -231,10 +231,10 @@ func TestOpenAIMessages_Add_UnknownEventType_NoMessageAdded(t *testing.T) {
 func TestOpenAIMessages_Add_Sequence(t *testing.T) {
 	m := openAIMessages{}
 
-	m.Add(chat.NewEventNewSystemMessage("System prompt"))
-	m.Add(chat.NewEventNewUserMessage("Hello"))
-	m.Add(chat.NewEventNewAssistantMessage("Hi there"))
-	m.Add(chat.NewEventNewUserMessage("How are you?"))
+	m.Add(chat.NewEventSystemMessage("System prompt"))
+	m.Add(chat.NewEventUserMessage("Hello"))
+	m.Add(chat.NewEventAssistantMessage("Hi there"))
+	m.Add(chat.NewEventUserMessage("How are you?"))
 
 	if len(m) != 4 {
 		t.Fatalf("Expected 4 messages, got %d", len(m))

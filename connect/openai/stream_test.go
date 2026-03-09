@@ -98,7 +98,7 @@ func TestHandleRawChunk_ContentOnly(t *testing.T) {
 	if len(events) != 1 {
 		t.Fatalf("Expected 1 event, got %d", len(events))
 	}
-	token, ok := events[0].(chat.EventNewToken)
+	token, ok := events[0].(chat.EventToken)
 	if !ok {
 		t.Fatalf("Expected EventNewToken, got %T", events[0])
 	}
@@ -119,7 +119,7 @@ func TestHandleRawChunk_RefusalOnly(t *testing.T) {
 	if len(events) != 1 {
 		t.Fatalf("Expected 1 event, got %d", len(events))
 	}
-	refusal, ok := events[0].(chat.EventNewRefusal)
+	refusal, ok := events[0].(chat.EventRefusal)
 	if !ok {
 		t.Fatalf("Expected EventNewRefusal, got %T", events[0])
 	}
@@ -142,7 +142,7 @@ func TestHandleRawChunk_SingleToolCall(t *testing.T) {
 	if len(events) != 1 {
 		t.Fatalf("Expected 1 event, got %d", len(events))
 	}
-	tc, ok := events[0].(chat.EventNewToolCall)
+	tc, ok := events[0].(chat.EventToolCall)
 	if !ok {
 		t.Fatalf("Expected EventNewToolCall, got %T", events[0])
 	}
@@ -173,7 +173,7 @@ func TestHandleRawChunk_MultipleToolCalls(t *testing.T) {
 		t.Fatalf("Expected 2 events, got %d", len(events))
 	}
 	for i, ev := range events {
-		if _, ok := ev.(chat.EventNewToolCall); !ok {
+		if _, ok := ev.(chat.EventToolCall); !ok {
 			t.Errorf("Expected EventNewToolCall at index %d, got %T", i, ev)
 		}
 	}
@@ -240,7 +240,7 @@ func TestNext_SingleChunk_ReturnsTrueAndParsesEvent(t *testing.T) {
 	if event == nil {
 		t.Fatal("Expected non-nil Current() after Next()")
 	}
-	if _, ok := event.(chat.EventNewToken); !ok {
+	if _, ok := event.(chat.EventToken); !ok {
 		t.Errorf("Expected EventNewToken, got %T", event)
 	}
 }
@@ -346,7 +346,7 @@ func TestNext_MultipleChunks_AllEventsReceived(t *testing.T) {
 
 	contents := []string{"Hello", " world", "!"}
 	for i, ev := range received {
-		token, ok := ev.(chat.EventNewToken)
+		token, ok := ev.(chat.EventToken)
 		if !ok {
 			t.Fatalf("Expected EventNewToken at index %d, got %T", i, ev)
 		}

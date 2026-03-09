@@ -69,7 +69,7 @@ type Stream[T any] interface {
 
 type Verdict struct {
 	Accepted bool
-	call     EventNewToolCall
+	call     EventToolCall
 }
 
 type ApproveWaiter struct {
@@ -86,7 +86,7 @@ func NewApproveWaiter(ctx context.Context) *ApproveWaiter {
 
 // Attach wires the event to the waiter
 // Call this on the local `event` value before appending it to toolCalls.
-func (a *ApproveWaiter) Attach(e *EventNewToolCall) {
+func (a *ApproveWaiter) Attach(e *EventToolCall) {
 	e.approval = a
 }
 

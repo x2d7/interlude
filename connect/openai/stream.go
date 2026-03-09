@@ -113,17 +113,17 @@ func (s *OpenAIStream) _handleRawChunk(chunk openai.ChatCompletionChunk) ([]chat
 	_ = choice.FinishReason
 
 	if content != "" {
-		result = append(result, chat.NewEventNewToken(content))
+		result = append(result, chat.NewEventToken(content))
 	}
 
 	if refusal != "" {
-		result = append(result, chat.NewEventNewRefusal(refusal))
+		result = append(result, chat.NewEventRefusal(refusal))
 	}
 
 	for _, tool := range tools {
 		name := tool.Function.Name
 		arguments := tool.Function.Arguments
-		result = append(result, chat.NewEventNewToolCall(tool.ID, name, arguments))
+		result = append(result, chat.NewEventToolCall(tool.ID, name, arguments))
 	}
 
 	return result, nil

@@ -9,11 +9,11 @@ func (c *Chat) AddMessage(sender Sender, content string) error {
 
 	switch sender.(type) {
 	case SenderUser:
-		newEvent = NewEventNewUserMessage(content)
+		newEvent = NewEventUserMessage(content)
 	case SenderAssistant:
-		newEvent = NewEventNewAssistantMessage(content)
+		newEvent = NewEventAssistantMessage(content)
 	case SenderSystem:
-		newEvent = NewEventNewSystemMessage(content)
+		newEvent = NewEventSystemMessage(content)
 	default:
 		return ErrUnsupportedSender
 	}
@@ -24,9 +24,9 @@ func (c *Chat) AddMessage(sender Sender, content string) error {
 }
 
 // AppendEvent adds a full message event to the chat.
-// The event must represent a complete message (e.g., EventNewUserMessage,
-// EventNewAssistantMessage, EventNewToolMessage), not intermediate streaming
-// events like EventNewToken. Providers are not required to sync such events
+// The event must represent a complete message (e.g., EventUserMessage,
+// EventAssistantMessage, EventToolMessage), not intermediate streaming
+// events like EventToken. Providers are not required to sync such events
 // in their SyncInput implementation.
 func (c *Chat) AppendEvent(event StreamEvent) {
 	c.Messages.AddEvent(event)
@@ -36,7 +36,7 @@ func (c *Chat) SendStream(ctx context.Context, client Client, sender Sender, con
 	err := c.AddMessage(sender, content)
 	if err != nil {
 		result := make(chan StreamEvent, 1)
-		result <- NewEventNewError(err)
+		result <- NewEventError(err)
 		close(result)
 		return result
 	}
