@@ -121,6 +121,11 @@ func (c *Chat) Session(ctx context.Context, client Client) <-chan StreamEvent {
 
 		for {
 			if restart {
+				// send completion start event
+				if !send(NewEventCompletionStart()) {
+					return
+				}
+
 				// reset state
 				state.reset()
 
