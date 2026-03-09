@@ -1,5 +1,10 @@
 package chat
 
+import (
+	"encoding/json"
+	"errors"
+)
+
 // eventType represents the type of event
 type eventType string
 
@@ -28,10 +33,13 @@ const (
 
 // EventBase is a base type for simple event types
 type EventBase struct {
-	Content string
+	Content string `json:"text"`
 }
 
-type EventCompletionEnded struct{} // TODO: можно добавлять список вызовов инструментов и другую информацию о генерации
+// EventCompletionEnded represents a completion ended event
+// TODO: добавить finish_reason
+// TODO: добавить список вызовов инструментов
+type EventCompletionEnded struct{}
 
 func (e EventCompletionEnded) getType() eventType { return eventCompletionEnded }
 
@@ -39,10 +47,11 @@ func NewEventCompletionEnded() EventCompletionEnded {
 	return EventCompletionEnded{}
 }
 
+// EventToolCall represents a tool call event
 type EventToolCall struct {
 	EventBase
-	CallID string
-	Name   string
+	CallID string `json:"call_id"`
+	Name   string `json:"name"`
 
 	approval *ApproveWaiter
 	answered bool
@@ -67,9 +76,28 @@ func NewEventToolCall(callID, name string, arguments string) EventToolCall {
 	return EventToolCall{EventBase: EventBase{Content: arguments}, CallID: callID, Name: name}
 }
 
-// EventError represents a error event
+// EventError represents an error event
 type EventError struct {
 	Error error
+}
+
+func (e EventError) MarshalJSON() ([]byte, error) {
+	return json.Marshal(struct {
+		Message string `json:"error"`
+	}{
+		Message: e.Error.Error(),
+	})
+}
+
+func (e *EventError) UnmarshalJSON(data []byte) error {
+	var v struct {
+		Message string `json:"error"`
+	}
+	if err := json.Unmarshal(data, &v); err != nil {
+		return err
+	}
+	e.Error = errors.New(v.Message)
+	return nil
 }
 
 func (e EventError) getType() eventType { return eventError }
@@ -103,7 +131,7 @@ func NewEventUserMessage(content string) EventUserMessage {
 	return EventUserMessage{EventBase: EventBase{Content: content}}
 }
 
-// EventAssistantMessage represents a assistant message event
+// EventAssistantMessage represents an assistant message event
 type EventAssistantMessage struct {
 	EventBase
 }
@@ -130,9 +158,8 @@ func NewEventSystemMessage(content string) EventSystemMessage {
 // EventToolMessage represents a tool message event
 type EventToolMessage struct {
 	EventBase
-	// CallID is the ID of the tool call request that was previously sent by assistant
-	CallID  string
-	Success bool
+	CallID  string `json:"call_id"`
+	Success bool   `json:"success"`
 }
 
 func (e EventToolMessage) getType() eventType { return eventToolMessage }
