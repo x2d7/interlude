@@ -200,6 +200,7 @@ func (c *Chat) Session(ctx context.Context, client Client) <-chan StreamEvent {
 }
 
 func (c *Chat) handleCompletionEnd(ctx context.Context, state *sessionState) (proceed bool) {
+	proceed = false
 	// adding collected events to the chat (assistant's tokens and tool calls)
 	if state.builder.Len() != 0 {
 		c.AppendEvent(NewEventAssistantMessage(state.builder.String()))
@@ -212,16 +213,16 @@ func (c *Chat) handleCompletionEnd(ctx context.Context, state *sessionState) (pr
 
 	// send last tool call if it wasn't sent yet
 	if !state.flushLastToolCall() {
-		return false
+		return
 	}
 
 	// ending current completion
 	if !state.send(NewEventCompletionEnded()) {
-		return false
+		return
 	}
 
 	if callAmount == 0 {
-		return false
+		return
 	}
 
 	// initializing approval waiter
