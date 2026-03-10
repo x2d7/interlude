@@ -779,8 +779,7 @@ func TestHelpers_SendUserStream(t *testing.T) {
 	}
 
 	mockClient := NewMockClient()
-	mockClient.SetStreamingEvents([]StreamEvent{
-	})
+	mockClient.SetStreamingEvents([]StreamEvent{})
 
 	ctx, cancel := context.WithCancel(context.Background())
 	events := chat.SendUserStream(ctx, mockClient, "User message")
@@ -810,8 +809,7 @@ func TestHelpers_SendAssistantStream(t *testing.T) {
 	}
 
 	mockClient := NewMockClient()
-	mockClient.SetStreamingEvents([]StreamEvent{
-	})
+	mockClient.SetStreamingEvents([]StreamEvent{})
 
 	ctx, cancel := context.WithCancel(context.Background())
 	events := chat.SendAssistantStream(ctx, mockClient, "Assistant message")
@@ -841,8 +839,7 @@ func TestHelpers_SendSystemStream(t *testing.T) {
 	}
 
 	mockClient := NewMockClient()
-	mockClient.SetStreamingEvents([]StreamEvent{
-	})
+	mockClient.SetStreamingEvents([]StreamEvent{})
 
 	ctx, cancel := context.WithCancel(context.Background())
 	events := chat.SendSystemStream(ctx, mockClient, "System message")
