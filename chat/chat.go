@@ -86,9 +86,6 @@ func (c *Chat) Session(ctx context.Context, client Client) <-chan StreamEvent {
 	// ensuring default values
 	c.ensureDefaults()
 
-	// insert chat context into client input configuration
-	client = client.SyncInput(c)
-
 	// creating the channels
 	result := make(chan StreamEvent, 16)
 
@@ -115,14 +112,32 @@ func (c *Chat) Session(ctx context.Context, client Client) <-chan StreamEvent {
 
 		// session state
 		state := &sessionState{
-			client: client,
-			events: c.Complete(ctx, client),
-			send:   send,
-			ctx:    ctx,
+			send: send,
+			ctx:  ctx,
 		}
-		state.reset()
+
+		// flag to start completion this iteration
+		restart := true
 
 		for {
+			if restart {
+				// send completion start event
+				if !send(NewEventCompletionStart()) {
+					return
+				}
+
+				// reset state
+				state.reset()
+
+				// insert chat context into client input configuration
+				client := client.SyncInput(c)
+				state.client = client
+
+				// start completion
+				state.events = c.Complete(ctx, client)
+				restart = false
+			}
+
 			select {
 			case <-ctx.Done():
 				return
@@ -131,6 +146,7 @@ func (c *Chat) Session(ctx context.Context, client Client) <-chan StreamEvent {
 					if !c.handleCompletionEnd(ctx, state) {
 						return
 					}
+					restart = true
 					continue
 				}
 
@@ -156,12 +172,35 @@ func (c *Chat) Session(ctx context.Context, client Client) <-chan StreamEvent {
 						if !state.flushLastToolCall() {
 							return
 						}
+
+						// inject callback
+						event.onResolved = func(callID string, accepted bool) {
+							send(EventToolCallResolved{
+								CallID:   callID,
+								Accepted: accepted,
+							})
+						}
+
 						state.approval.Attach(&event)
 						state.toolCalls = append(state.toolCalls, event)
 						state.lastToolCall = &state.toolCalls[len(state.toolCalls)-1]
+
+						// send tool call token
+						if !state.send(NewEventToolCallToken(event.CallID, event.Name, event.Content)) {
+							return
+						}
 					} else {
 						// add token to the last tool call
 						state.lastToolCall.Content += event.Content
+
+						callID := state.lastToolCall.CallID
+						name := state.lastToolCall.Name
+						token := event.Content
+
+						// send tool call token
+						if !state.send(NewEventToolCallToken(callID, name, token)) {
+							return
+						}
 					}
 				case EventRefusal:
 					c.AppendEvent(event)
@@ -184,6 +223,7 @@ func (c *Chat) Session(ctx context.Context, client Client) <-chan StreamEvent {
 }
 
 func (c *Chat) handleCompletionEnd(ctx context.Context, state *sessionState) (proceed bool) {
+	proceed = false
 	// adding collected events to the chat (assistant's tokens and tool calls)
 	if state.builder.Len() != 0 {
 		c.AppendEvent(NewEventAssistantMessage(state.builder.String()))
@@ -196,16 +236,16 @@ func (c *Chat) handleCompletionEnd(ctx context.Context, state *sessionState) (pr
 
 	// send last tool call if it wasn't sent yet
 	if !state.flushLastToolCall() {
-		return false
+		return
 	}
 
 	// ending current completion
-	if !state.send(NewEventCompletionEnded()) {
-		return false
+	if !state.send(NewEventCompletionEnded(state.toolCalls)) {
+		return
 	}
 
 	if callAmount == 0 {
-		return false
+		return
 	}
 
 	// initializing approval waiter
@@ -215,20 +255,22 @@ func (c *Chat) handleCompletionEnd(ctx context.Context, state *sessionState) (pr
 	for verdict := range verdicts {
 		call := verdict.call
 
+		var toolMessage EventToolMessage
+
 		if verdict.Accepted {
 			callResult, success := c.Tools.Execute(call.Name, call.Content)
-			c.AppendEvent(NewEventToolMessage(call.CallID, callResult, success))
+			toolMessage = NewEventToolMessage(call.CallID, callResult, success)
 		} else {
-			c.AppendEvent(NewEventToolMessage(call.CallID, "User declined the tool call", false))
+			toolMessage = NewEventToolMessage(call.CallID, "User declined the tool call", false)
+		}
+		// adding tool message to the chat
+		c.AppendEvent(toolMessage)
+
+		// sending tool message
+		if !state.send(toolMessage) {
+			return
 		}
 	}
-
-	// reset state
-	state.reset()
-
-	// resume text completion
-	state.client = state.client.SyncInput(c)
-	state.events = c.Complete(ctx, state.client)
 
 	return true
 }

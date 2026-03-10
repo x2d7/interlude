@@ -13,11 +13,14 @@ const (
 
 	eventToken           eventType = "token"
 	eventToolCall        eventType = "tool_call"
+	eventToolCallToken   eventType = "tool_call_token"
 	eventRefusal         eventType = "refusal"
+	eventCompletionStart eventType = "completion_start"
 	eventCompletionEnded eventType = "completion_ended"
 
 	// events produced by consumer
 
+	eventToolCallResolved eventType = "tool_call_resolved"
 	eventUserMessage      eventType = "user_message"
 	eventAssistantMessage eventType = "assistant_message"
 	eventSystemMessage    eventType = "system_message"
@@ -36,15 +39,25 @@ type EventBase struct {
 	Content string `json:"text"`
 }
 
+// EventCompletionStart represents a completion start event
+type EventCompletionStart struct{}
+
+func (e EventCompletionStart) getType() eventType { return eventCompletionStart }
+
+func NewEventCompletionStart() EventCompletionStart {
+	return EventCompletionStart{}
+}
+
 // EventCompletionEnded represents a completion ended event
 // TODO: добавить finish_reason
-// TODO: добавить список вызовов инструментов
-type EventCompletionEnded struct{}
+type EventCompletionEnded struct {
+	ToolCalls []EventToolCall `json:"tool_calls,omitempty"`
+}
 
 func (e EventCompletionEnded) getType() eventType { return eventCompletionEnded }
 
-func NewEventCompletionEnded() EventCompletionEnded {
-	return EventCompletionEnded{}
+func NewEventCompletionEnded(toolCalls []EventToolCall) EventCompletionEnded {
+	return EventCompletionEnded{ToolCalls: toolCalls}
 }
 
 // EventToolCall represents a tool call event
@@ -55,6 +68,8 @@ type EventToolCall struct {
 
 	approval *ApproveWaiter
 	answered bool
+
+	onResolved func(callID string, accepted bool)
 }
 
 func (e *EventToolCall) Resolve(accept bool) {
@@ -65,6 +80,11 @@ func (e *EventToolCall) Resolve(accept bool) {
 	if e.approval == nil {
 		return
 	}
+
+	if e.onResolved != nil {
+		e.onResolved(e.CallID, accept)
+	}
+
 	verdict := Verdict{Accepted: accept, call: *e}
 	e.approval.Resolve(verdict)
 }
@@ -74,6 +94,33 @@ func (e EventToolCall) getType() eventType { return eventToolCall }
 // NewEventToolCall creates a new EventToolCall
 func NewEventToolCall(callID, name string, arguments string) EventToolCall {
 	return EventToolCall{EventBase: EventBase{Content: arguments}, CallID: callID, Name: name}
+}
+
+// EventToolCallResolved spawns when tool call is resolved by the user
+type EventToolCallResolved struct {
+	CallID   string `json:"call_id"`
+	Accepted bool   `json:"accepted"`
+}
+
+func (e EventToolCallResolved) getType() eventType { return eventToolCallResolved }
+
+func NewEventToolCallResolved(callID string, accepted bool) EventToolCallResolved {
+	return EventToolCallResolved{CallID: callID, Accepted: accepted}
+}
+
+// EventToolCallToken represents a tool call token event
+// Used for streaming. Not supported by some providers
+type EventToolCallToken struct {
+	EventBase
+	CallID string `json:"call_id"`
+	Name   string `json:"name"`
+}
+
+func (e EventToolCallToken) getType() eventType { return eventToolCallToken }
+
+// NewEventToolCallToken creates a new EventToolCallToken
+func NewEventToolCallToken(callID, name string, token string) EventToolCallToken {
+	return EventToolCallToken{EventBase: EventBase{Content: token}, CallID: callID, Name: name}
 }
 
 // EventError represents an error event
@@ -185,6 +232,8 @@ func NewEventRefusal(content string) EventRefusal {
 type StreamEvent interface {
 	getType() eventType
 }
+
+// TODO: Remove deprecated types in v0.4
 
 // Deprecated: Use EventToken instead.
 type EventNewToken = EventToken
