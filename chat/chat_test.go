@@ -651,7 +651,7 @@ func TestSession_ToolRejected(t *testing.T) {
 		if msg.getType() == eventToolMessage {
 			toolMsg := msg.(EventToolMessage)
 			if toolMsg.CallID == "call-1" && !toolMsg.Success &&
-				toolMsg.Content == "User declined the tool call" {
+				toolMsg.Content == DefaultDeclinedToolMessage {
 				rejectionFound = true
 			}
 		}
@@ -1653,7 +1653,7 @@ func TestSession_ToolMessageEmission_Rejection(t *testing.T) {
 		t.Errorf("Expected CallID 'call-1', got '%s'", toolMessage.CallID)
 	}
 
-	if toolMessage.Content != "User declined the tool call" {
+	if toolMessage.Content != DefaultDeclinedToolMessage {
 		t.Errorf("Expected rejection message, got '%s'", toolMessage.Content)
 	}
 
