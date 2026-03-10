@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/x2d7/interlude/chat/tools"
 )
 
@@ -2172,4 +2174,43 @@ func TestSession_ToolCallDuplicationIssue(t *testing.T) {
 			t.Errorf("Expected 1 tool message, got %d (possible double execution)", toolMessageCount)
 		}
 	})
+}
+
+func TestSession_ToolCall_DoubleResolveFromCopies(t *testing.T) {
+	c := &Chat{
+		Messages: NewMessages(),
+		Tools:    tools.NewTools(),
+	}
+
+	execCount := atomic.Int32{}
+	tool, _ := tools.NewTool[map[string]string]("test-tool", "Test tool",
+		func(input map[string]string) (string, error) {
+			execCount.Add(1)
+			return "result", nil
+		})
+	c.Tools.Add(tool)
+
+	mockClient := NewMultiRoundMockClient([][]StreamEvent{
+		{NewEventToolCall("call-1", "test-tool", `{"key": "value"}`)},
+		{},
+	})
+
+	ctx := context.Background()
+	events := c.Session(ctx, mockClient)
+
+	for event := range events {
+		switch e := event.(type) {
+		case EventToolCall:
+			err := e.Resolve(true)
+			assert.NoError(t, err)
+		case EventCompletionEnded:
+			if len(e.ToolCalls) > 0 {
+				// копия из EventCompletionEnded — уже резолвнута из стрима
+				err := e.ToolCalls[0].Resolve(true)
+				assert.ErrorIs(t, err, ErrAlreadyResolved)
+			}
+		}
+	}
+
+	assert.Equal(t, int32(1), execCount.Load(), "tool must be executed exactly once")
 }
