@@ -72,17 +72,18 @@ type EventToolCall struct {
 	onResolved func(callID string, accepted bool)
 }
 
-func (e *EventToolCall) Resolve(accept bool) {
+func (e *EventToolCall) Resolve(accept bool) error {
 	if e.answered == nil || !e.answered.CompareAndSwap(false, true) {
-		return
+		return ErrAlreadyResolved
 	}
 	if e.approval == nil {
-		return
+		return nil
 	}
 	if e.onResolved != nil {
 		e.onResolved(e.CallID, accept)
 	}
 	e.approval.Resolve(Verdict{Accepted: accept, call: *e})
+	return nil
 }
 
 func (e EventToolCall) getType() eventType { return eventToolCall }
