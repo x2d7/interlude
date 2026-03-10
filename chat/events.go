@@ -212,6 +212,8 @@ type StreamEvent interface {
 	getType() eventType
 }
 
+// TODO: Remove deprecated types in v0.4
+
 // Deprecated: Use EventToken instead.
 type EventNewToken = EventToken
 
