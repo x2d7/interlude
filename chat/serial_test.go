@@ -107,7 +107,63 @@ func TestMarshalUnmarshalEvent_RoundTrip(t *testing.T) {
 				assert.Equal(t, "something went wrong", e.Error.Error())
 			},
 		},
-	}
+		{
+			name:  "EventCompletionStart",
+			event: NewEventCompletionStart(),
+			check: func(t *testing.T, result StreamEvent) {
+				_, ok := result.(EventCompletionStart)
+				require.True(t, ok)
+			},
+		},
+		{
+			name:  "EventToolCallToken",
+			event: NewEventToolCallToken("call-789", "stream_tool", `{"par`),
+			check: func(t *testing.T, result StreamEvent) {
+				e, ok := result.(EventToolCallToken)
+				require.True(t, ok)
+				assert.Equal(t, "call-789", e.CallID)
+				assert.Equal(t, "stream_tool", e.Name)
+				assert.Equal(t, `{"par`, e.Content)
+			},
+		},
+		{
+			name:  "EventToolCallResolved_Accepted",
+			event: NewEventToolCallResolved("call-123", true),
+			check: func(t *testing.T, result StreamEvent) {
+				e, ok := result.(EventToolCallResolved)
+				require.True(t, ok)
+				assert.Equal(t, "call-123", e.CallID)
+				assert.True(t, e.Accepted)
+			},
+		},
+		{
+			name:  "EventToolCallResolved_Rejected",
+			event: NewEventToolCallResolved("call-456", false),
+			check: func(t *testing.T, result StreamEvent) {
+				e, ok := result.(EventToolCallResolved)
+				require.True(t, ok)
+				assert.Equal(t, "call-456", e.CallID)
+				assert.False(t, e.Accepted)
+			},
+		},
+		{
+			name: "EventCompletionEnded_WithToolCalls",
+			event: NewEventCompletionEnded([]EventToolCall{
+				NewEventToolCall("call-1", "tool_a", `{"x":1}`),
+				NewEventToolCall("call-2", "tool_b", `{"y":2}`),
+			}),
+			check: func(t *testing.T, result StreamEvent) {
+				e, ok := result.(EventCompletionEnded)
+				require.True(t, ok)
+				require.Len(t, e.ToolCalls, 2)
+				assert.Equal(t, "call-1", e.ToolCalls[0].CallID)
+				assert.Equal(t, "tool_a", e.ToolCalls[0].Name)
+				assert.Equal(t, `{"x":1}`, e.ToolCalls[0].Content)
+				assert.Equal(t, "call-2", e.ToolCalls[1].CallID)
+				assert.Equal(t, "tool_b", e.ToolCalls[1].Name)
+				assert.Equal(t, `{"y":2}`, e.ToolCalls[1].Content)
+			},
+		}}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
