@@ -2102,3 +2102,74 @@ func TestSession_ToolMessageInHistory(t *testing.T) {
 		t.Error("Expected EventToolMessage to be added to history")
 	}
 }
+
+func TestSession_ToolCallDuplicationIssue(t *testing.T) {
+	chatTools := tools.NewTools()
+	ch := &Chat{
+		Messages: NewMessages(),
+		Tools:    chatTools,
+	}
+
+	tool, err := tools.NewTool[map[string]string]("test-tool", "Test tool",
+		func(input map[string]string) (string, error) {
+			return "result", nil
+		})
+	if err != nil {
+		t.Fatalf("Failed to create tool: %v", err)
+	}
+	ch.Tools.Add(tool)
+
+	mockClient := NewMultiRoundMockClient([][]StreamEvent{
+		{NewEventToolCall("call-1", "test-tool", `{"key": "value"}`)},
+		{},
+	})
+
+	ctx := context.Background()
+	events := ch.Session(ctx, mockClient)
+
+	var completionEndedEvent *EventCompletionEnded
+	var streamToolCalls []EventToolCall
+
+	// Consume events and resolve tool calls inline to avoid deadlock.
+	// Session blocks in approval.Wait() until verdicts arrive —
+	// so we must Resolve() before the channel can close.
+	for event := range events {
+		switch e := event.(type) {
+		case EventToolCall:
+			streamToolCalls = append(streamToolCalls, e)
+		case EventCompletionEnded:
+			ce := e
+			completionEndedEvent = &ce
+			// Resolve from EventCompletionEnded — first resolve, should fire
+			for _, tc := range ce.ToolCalls {
+				tc := tc
+				tc.Resolve(true)
+			}
+			// Resolve from stream copies — should be no-op due to answered flag
+			for _, tc := range streamToolCalls {
+				tc := tc
+				tc.Resolve(true)
+			}
+		}
+	}
+
+	if completionEndedEvent == nil {
+		t.Fatal("Expected EventCompletionEnded")
+	}
+	if len(streamToolCalls) == 0 {
+		t.Fatal("Expected EventToolCall from stream")
+	}
+
+	t.Run("verify_no_double_execution", func(t *testing.T) {
+		messages := ch.Messages.Snapshot()
+		toolMessageCount := 0
+		for _, msg := range messages {
+			if tm, ok := msg.(EventToolMessage); ok && tm.CallID == "call-1" {
+				toolMessageCount++
+			}
+		}
+		if toolMessageCount != 1 {
+			t.Errorf("Expected 1 tool message, got %d (possible double execution)", toolMessageCount)
+		}
+	})
+}
