@@ -36,6 +36,8 @@ func UnmarshalEvent(data []byte) (StreamEvent, error) {
 		return unmarshalPayload[EventToken](env.Payload)
 	case eventToolCall:
 		return unmarshalPayload[EventToolCall](env.Payload)
+	case eventToolCallResolved:
+		return unmarshalPayload[EventToolCallResolved](env.Payload)
 	case eventToolCallToken:
 		return unmarshalPayload[EventToolCallToken](env.Payload)
 	case eventRefusal:

@@ -20,6 +20,7 @@ const (
 
 	// events produced by consumer
 
+	eventToolCallResolved eventType = "tool_call_resolved"
 	eventUserMessage      eventType = "user_message"
 	eventAssistantMessage eventType = "assistant_message"
 	eventSystemMessage    eventType = "system_message"
@@ -92,6 +93,18 @@ func (e EventToolCall) getType() eventType { return eventToolCall }
 // NewEventToolCall creates a new EventToolCall
 func NewEventToolCall(callID, name string, arguments string) EventToolCall {
 	return EventToolCall{EventBase: EventBase{Content: arguments}, CallID: callID, Name: name}
+}
+
+// EventToolCallResolved spawns when tool call is resolved by the user
+type EventToolCallResolved struct {
+	CallID   string `json:"call_id"`
+	Accepted bool   `json:"accepted"`
+}
+
+func (e EventToolCallResolved) getType() eventType { return eventToolCallResolved }
+
+func NewEventToolCallResolved(callID string, accepted bool) EventToolCallResolved {
+	return EventToolCallResolved{CallID: callID, Accepted: accepted}
 }
 
 // EventToolCallToken represents a tool call token event
