@@ -1522,3 +1522,586 @@ func TestEnsureDefaults_AlreadySet(t *testing.T) {
 		t.Errorf("Expected 1 tool, got %d", len(toolList))
 	}
 }
+
+// ==================== Tool Message Emission Tests ====================
+
+// TestSession_ToolMessageEmission_Success tests that EventToolMessage is emitted when tool call is accepted and succeeds
+func TestSession_ToolMessageEmission_Success(t *testing.T) {
+	chatTools := tools.NewTools()
+	chat := &Chat{
+		Messages: NewMessages(),
+		Tools:    chatTools,
+	}
+
+	tool, err := tools.NewTool[map[string]string]("weather", "Get weather",
+		func(input map[string]string) (string, error) {
+			return "sunny in Moscow", nil
+		})
+	if err != nil {
+		t.Fatalf("Failed to create tool: %v", err)
+	}
+	chat.Tools.Add(tool)
+
+	// Round 1: tool call (Session generates CompletionEnded internally)
+	mockClient := NewMultiRoundMockClient([][]StreamEvent{
+		{NewEventToolCall("call-1", "weather", `{"city": "Moscow"}`)},
+		// Round 2: empty (session exits cleanly)
+		{},
+	})
+
+	ctx := context.Background()
+	events := chat.Session(ctx, mockClient)
+
+	var receivedEvents []StreamEvent
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for event := range events {
+			receivedEvents = append(receivedEvents, event)
+			if tc, ok := event.(EventToolCall); ok {
+				tc.Resolve(true)
+			}
+		}
+	}()
+
+	<-done
+
+	// Verify EventToolMessage was emitted
+	var toolMessageFound bool
+	var toolMessage EventToolMessage
+	for _, event := range receivedEvents {
+		if tm, ok := event.(EventToolMessage); ok {
+			toolMessageFound = true
+			toolMessage = tm
+			break
+		}
+	}
+
+	if !toolMessageFound {
+		t.Error("Expected EventToolMessage to be emitted")
+	}
+
+	if toolMessage.CallID != "call-1" {
+		t.Errorf("Expected CallID 'call-1', got '%s'", toolMessage.CallID)
+	}
+
+	if toolMessage.Content != "sunny in Moscow" {
+		t.Errorf("Expected content 'sunny in Moscow', got '%s'", toolMessage.Content)
+	}
+
+	if !toolMessage.Success {
+		t.Error("Expected Success to be true")
+	}
+}
+
+// TestSession_ToolMessageEmission_Rejection tests that EventToolMessage is emitted when tool call is rejected
+func TestSession_ToolMessageEmission_Rejection(t *testing.T) {
+	chatTools := tools.NewTools()
+	chat := &Chat{
+		Messages: NewMessages(),
+		Tools:    chatTools,
+	}
+
+	tool, err := tools.NewTool[map[string]string]("weather", "Get weather",
+		func(input map[string]string) (string, error) {
+			return "sunny", nil
+		})
+	if err != nil {
+		t.Fatalf("Failed to create tool: %v", err)
+	}
+	chat.Tools.Add(tool)
+
+	// Round 1: tool call (Session generates CompletionEnded internally)
+	mockClient := NewMultiRoundMockClient([][]StreamEvent{
+		{NewEventToolCall("call-1", "weather", `{"city": "Moscow"}`)},
+		// Round 2: empty (session exits cleanly)
+		{},
+	})
+
+	ctx := context.Background()
+	events := chat.Session(ctx, mockClient)
+
+	var receivedEvents []StreamEvent
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for event := range events {
+			receivedEvents = append(receivedEvents, event)
+			if tc, ok := event.(EventToolCall); ok {
+				tc.Resolve(false)
+			}
+		}
+	}()
+
+	<-done
+
+	// Verify EventToolMessage was emitted with rejection message
+	var toolMessageFound bool
+	var toolMessage EventToolMessage
+	for _, event := range receivedEvents {
+		if tm, ok := event.(EventToolMessage); ok {
+			toolMessageFound = true
+			toolMessage = tm
+			break
+		}
+	}
+
+	if !toolMessageFound {
+		t.Error("Expected EventToolMessage to be emitted")
+	}
+
+	if toolMessage.CallID != "call-1" {
+		t.Errorf("Expected CallID 'call-1', got '%s'", toolMessage.CallID)
+	}
+
+	if toolMessage.Content != "User declined the tool call" {
+		t.Errorf("Expected rejection message, got '%s'", toolMessage.Content)
+	}
+
+	if toolMessage.Success {
+		t.Error("Expected Success to be false for rejected tool call")
+	}
+}
+
+// TestSession_ToolMessageEmission_ExecutionError tests that EventToolMessage is emitted when tool execution fails
+func TestSession_ToolMessageEmission_ExecutionError(t *testing.T) {
+	chatTools := tools.NewTools()
+	chat := &Chat{
+		Messages: NewMessages(),
+		Tools:    chatTools,
+	}
+
+	tool, err := tools.NewTool[map[string]string]("failing-tool", "Failing tool",
+		func(input map[string]string) (string, error) {
+			return "", errors.New("tool execution failed")
+		})
+	if err != nil {
+		t.Fatalf("Failed to create tool: %v", err)
+	}
+	chat.Tools.Add(tool)
+
+	// Round 1: tool call (Session generates CompletionEnded internally)
+	mockClient := NewMultiRoundMockClient([][]StreamEvent{
+		{NewEventToolCall("call-1", "failing-tool", `{}`)},
+		// Round 2: empty (session exits cleanly)
+		{},
+	})
+
+	ctx := context.Background()
+	events := chat.Session(ctx, mockClient)
+
+	var receivedEvents []StreamEvent
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for event := range events {
+			receivedEvents = append(receivedEvents, event)
+			if tc, ok := event.(EventToolCall); ok {
+				tc.Resolve(true)
+			}
+		}
+	}()
+
+	<-done
+
+	// Verify EventToolMessage was emitted with error message
+	var toolMessageFound bool
+	var toolMessage EventToolMessage
+	for _, event := range receivedEvents {
+		if tm, ok := event.(EventToolMessage); ok {
+			toolMessageFound = true
+			toolMessage = tm
+			break
+		}
+	}
+
+	if !toolMessageFound {
+		t.Error("Expected EventToolMessage to be emitted")
+	}
+
+	if toolMessage.CallID != "call-1" {
+		t.Errorf("Expected CallID 'call-1', got '%s'", toolMessage.CallID)
+	}
+
+	if !strings.Contains(toolMessage.Content, "tool execution failed") {
+		t.Errorf("Expected error message in content, got '%s'", toolMessage.Content)
+	}
+
+	if toolMessage.Success {
+		t.Error("Expected Success to be false for failed tool execution")
+	}
+}
+
+// TestSession_ToolCallResolvedEvent_Accept tests that EventToolCallResolved is emitted when tool call is accepted
+func TestSession_ToolCallResolvedEvent_Accept(t *testing.T) {
+	chatTools := tools.NewTools()
+	chat := &Chat{
+		Messages: NewMessages(),
+		Tools:    chatTools,
+	}
+
+	tool, err := tools.NewTool[map[string]string]("test-tool", "Test tool",
+		func(input map[string]string) (string, error) {
+			return "result", nil
+		})
+	if err != nil {
+		t.Fatalf("Failed to create tool: %v", err)
+	}
+	chat.Tools.Add(tool)
+
+	// Round 1: tool call (Session generates CompletionEnded internally)
+	mockClient := NewMultiRoundMockClient([][]StreamEvent{
+		{NewEventToolCall("call-1", "test-tool", `{"key": "value"}`)},
+		// Round 2: empty (session exits cleanly)
+		{},
+	})
+
+	ctx := context.Background()
+	events := chat.Session(ctx, mockClient)
+
+	var receivedEvents []StreamEvent
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for event := range events {
+			receivedEvents = append(receivedEvents, event)
+			if tc, ok := event.(EventToolCall); ok {
+				tc.Resolve(true)
+			}
+		}
+	}()
+
+	<-done
+
+	// Verify EventToolCallResolved was emitted
+	var resolvedEventFound bool
+	var resolvedEvent EventToolCallResolved
+	for _, event := range receivedEvents {
+		if r, ok := event.(EventToolCallResolved); ok {
+			resolvedEventFound = true
+			resolvedEvent = r
+			break
+		}
+	}
+
+	if !resolvedEventFound {
+		t.Error("Expected EventToolCallResolved to be emitted")
+	}
+
+	if resolvedEvent.CallID != "call-1" {
+		t.Errorf("Expected CallID 'call-1', got '%s'", resolvedEvent.CallID)
+	}
+
+	if !resolvedEvent.Accepted {
+		t.Error("Expected Accepted to be true")
+	}
+}
+
+// TestSession_ToolCallResolvedEvent_Reject tests that EventToolCallResolved is emitted when tool call is rejected
+func TestSession_ToolCallResolvedEvent_Reject(t *testing.T) {
+	chatTools := tools.NewTools()
+	chat := &Chat{
+		Messages: NewMessages(),
+		Tools:    chatTools,
+	}
+
+	tool, err := tools.NewTool[map[string]string]("test-tool", "Test tool",
+		func(input map[string]string) (string, error) {
+			return "result", nil
+		})
+	if err != nil {
+		t.Fatalf("Failed to create tool: %v", err)
+	}
+	chat.Tools.Add(tool)
+
+	// Round 1: tool call (Session generates CompletionEnded internally)
+	mockClient := NewMultiRoundMockClient([][]StreamEvent{
+		{NewEventToolCall("call-1", "test-tool", `{"key": "value"}`)},
+		// Round 2: empty (session exits cleanly)
+		{},
+	})
+
+	ctx := context.Background()
+	events := chat.Session(ctx, mockClient)
+
+	var receivedEvents []StreamEvent
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for event := range events {
+			receivedEvents = append(receivedEvents, event)
+			if tc, ok := event.(EventToolCall); ok {
+				tc.Resolve(false)
+			}
+		}
+	}()
+
+	<-done
+
+	// Verify EventToolCallResolved was emitted
+	var resolvedEventFound bool
+	var resolvedEvent EventToolCallResolved
+	for _, event := range receivedEvents {
+		if r, ok := event.(EventToolCallResolved); ok {
+			resolvedEventFound = true
+			resolvedEvent = r
+			break
+		}
+	}
+
+	if !resolvedEventFound {
+		t.Error("Expected EventToolCallResolved to be emitted")
+	}
+
+	if resolvedEvent.CallID != "call-1" {
+		t.Errorf("Expected CallID 'call-1', got '%s'", resolvedEvent.CallID)
+	}
+
+	if resolvedEvent.Accepted {
+		t.Error("Expected Accepted to be false")
+	}
+}
+
+// TestSession_MultipleToolCalls_Events tests that multiple tool calls generate proper events
+func TestSession_MultipleToolCalls_Events(t *testing.T) {
+	chatTools := tools.NewTools()
+	chat := &Chat{
+		Messages: NewMessages(),
+		Tools:    chatTools,
+	}
+
+	tool1, err := tools.NewTool[map[string]string]("tool1", "Tool 1",
+		func(input map[string]string) (string, error) {
+			return "result1", nil
+		})
+	if err != nil {
+		t.Fatalf("Failed to create tool: %v", err)
+	}
+	tool2, err := tools.NewTool[map[string]string]("tool2", "Tool 2",
+		func(input map[string]string) (string, error) {
+			return "result2", nil
+		})
+	if err != nil {
+		t.Fatalf("Failed to create tool: %v", err)
+	}
+	chat.Tools.Add(tool1)
+	chat.Tools.Add(tool2)
+
+	// Round 1: two tool calls (Session generates CompletionEnded internally)
+	mockClient := NewMultiRoundMockClient([][]StreamEvent{
+		{
+			NewEventToolCall("call-1", "tool1", `{"param": "value1"}`),
+			NewEventToolCall("call-2", "tool2", `{"param": "value2"}`),
+		},
+		// Round 2: empty (session exits cleanly)
+		{},
+	})
+
+	ctx := context.Background()
+	events := chat.Session(ctx, mockClient)
+
+	var receivedEvents []StreamEvent
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for event := range events {
+			receivedEvents = append(receivedEvents, event)
+			if tc, ok := event.(EventToolCall); ok {
+				tc.Resolve(true)
+			}
+		}
+	}()
+
+	<-done
+
+	// Count events
+	var toolMessages []EventToolMessage
+	var resolvedEvents []EventToolCallResolved
+	for _, event := range receivedEvents {
+		if tm, ok := event.(EventToolMessage); ok {
+			toolMessages = append(toolMessages, tm)
+		}
+		if r, ok := event.(EventToolCallResolved); ok {
+			resolvedEvents = append(resolvedEvents, r)
+		}
+	}
+
+	// Should have 2 tool messages (one for each tool call)
+	if len(toolMessages) != 2 {
+		t.Errorf("Expected 2 EventToolMessage events, got %d", len(toolMessages))
+	}
+
+	// Should have 2 resolved events (one for each tool call)
+	if len(resolvedEvents) != 2 {
+		t.Errorf("Expected 2 EventToolCallResolved events, got %d", len(resolvedEvents))
+	}
+
+	// Verify tool messages
+	callIDs := make(map[string]bool)
+	for _, tm := range toolMessages {
+		callIDs[tm.CallID] = true
+		if !tm.Success {
+			t.Error("Expected all tool messages to have Success=true")
+		}
+	}
+	if len(callIDs) != 2 || !callIDs["call-1"] || !callIDs["call-2"] {
+		t.Error("Expected tool messages for both call-1 and call-2")
+	}
+
+	// Verify resolved events
+	resolvedCallIDs := make(map[string]bool)
+	for _, r := range resolvedEvents {
+		resolvedCallIDs[r.CallID] = r.Accepted
+	}
+	if len(resolvedCallIDs) != 2 || !resolvedCallIDs["call-1"] || !resolvedCallIDs["call-2"] {
+		t.Error("Expected resolved events for both call-1 and call-2, both accepted")
+	}
+}
+
+// TestSession_EventOrdering tests the correct ordering of events in the stream
+func TestSession_EventOrdering(t *testing.T) {
+	chatTools := tools.NewTools()
+	chat := &Chat{
+		Messages: NewMessages(),
+		Tools:    chatTools,
+	}
+
+	tool, err := tools.NewTool[map[string]string]("test-tool", "Test tool",
+		func(input map[string]string) (string, error) {
+			return "result", nil
+		})
+	if err != nil {
+		t.Fatalf("Failed to create tool: %v", err)
+	}
+	chat.Tools.Add(tool)
+
+	// Round 1: tool call (Session generates CompletionEnded internally)
+	mockClient := NewMultiRoundMockClient([][]StreamEvent{
+		{NewEventToolCall("call-1", "test-tool", `{"key": "value"}`)},
+		// Round 2: empty (session exits cleanly)
+		{},
+	})
+
+	ctx := context.Background()
+	events := chat.Session(ctx, mockClient)
+
+	var receivedEvents []StreamEvent
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for event := range events {
+			receivedEvents = append(receivedEvents, event)
+			if tc, ok := event.(EventToolCall); ok {
+				tc.Resolve(true)
+			}
+		}
+	}()
+
+	<-done
+
+	// Find positions of key events
+	var positions = make(map[string]int)
+	for i, event := range receivedEvents {
+		switch event.getType() {
+		case eventToolCall:
+			positions["toolCall"] = i
+		case eventToolCallResolved:
+			positions["resolved"] = i
+		case eventToolMessage:
+			positions["toolMessage"] = i
+		case eventCompletionEnded:
+			positions["completionEnded"] = i
+		}
+	}
+
+	// Verify ordering: toolCall < resolved < toolMessage < completionEnded
+	if pos, ok := positions["toolCall"]; ok {
+		if rPos, ok := positions["resolved"]; ok && pos >= rPos {
+			t.Errorf("ToolCall (%d) should come before ToolCallResolved (%d)", pos, rPos)
+		}
+		if tmPos, ok := positions["toolMessage"]; ok && pos >= tmPos {
+			t.Errorf("ToolCall (%d) should come before ToolMessage (%d)", pos, tmPos)
+		}
+		if cPos, ok := positions["completionEnded"]; ok && pos >= cPos {
+			t.Errorf("ToolCall (%d) should come before CompletionEnded (%d)", pos, cPos)
+		}
+	}
+
+	if rPos, ok := positions["resolved"]; ok {
+		if tmPos, ok := positions["toolMessage"]; ok && rPos >= tmPos {
+			t.Errorf("ToolCallResolved (%d) should come before ToolMessage (%d)", rPos, tmPos)
+		}
+		if cPos, ok := positions["completionEnded"]; ok && rPos >= cPos {
+			t.Errorf("ToolCallResolved (%d) should come before CompletionEnded (%d)", rPos, cPos)
+		}
+	}
+
+	if tmPos, ok := positions["toolMessage"]; ok {
+		if cPos, ok := positions["completionEnded"]; ok && tmPos >= cPos {
+			t.Errorf("ToolMessage (%d) should come before CompletionEnded (%d)", tmPos, cPos)
+		}
+	}
+}
+
+// TestSession_ToolMessageInHistory tests that tool messages are added to chat history
+func TestSession_ToolMessageInHistory(t *testing.T) {
+	chatTools := tools.NewTools()
+	chat := &Chat{
+		Messages: NewMessages(),
+		Tools:    chatTools,
+	}
+
+	tool, err := tools.NewTool[map[string]string]("test-tool", "Test tool",
+		func(input map[string]string) (string, error) {
+			return "history result", nil
+		})
+	if err != nil {
+		t.Fatalf("Failed to create tool: %v", err)
+	}
+	chat.Tools.Add(tool)
+
+	// Round 1: tool call (Session generates CompletionEnded internally)
+	mockClient := NewMultiRoundMockClient([][]StreamEvent{
+		{NewEventToolCall("call-1", "test-tool", `{"key": "value"}`)},
+		// Round 2: empty (session exits cleanly)
+		{},
+	})
+
+	ctx := context.Background()
+	events := chat.Session(ctx, mockClient)
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for event := range events {
+			if tc, ok := event.(EventToolCall); ok {
+				tc.Resolve(true)
+			}
+		}
+	}()
+
+	<-done
+
+	// Check that tool message was added to history
+	messages := chat.Messages.Snapshot()
+	var toolMessageFound bool
+	for _, msg := range messages {
+		if tm, ok := msg.(EventToolMessage); ok {
+			toolMessageFound = true
+			if tm.CallID != "call-1" {
+				t.Errorf("Expected CallID 'call-1', got '%s'", tm.CallID)
+			}
+			if tm.Content != "history result" {
+				t.Errorf("Expected content 'history result', got '%s'", tm.Content)
+			}
+			if !tm.Success {
+				t.Error("Expected Success to be true")
+			}
+			break
+		}
+	}
+
+	if !toolMessageFound {
+		t.Error("Expected EventToolMessage to be added to history")
+	}
+}
