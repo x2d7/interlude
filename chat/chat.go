@@ -172,6 +172,15 @@ func (c *Chat) Session(ctx context.Context, client Client) <-chan StreamEvent {
 						if !state.flushLastToolCall() {
 							return
 						}
+
+						// inject callback
+						event.onResolved = func(callID string, accepted bool) {
+							send(EventToolCallResolved{
+								CallID:   callID,
+								Accepted: accepted,
+							})
+						}
+
 						state.approval.Attach(&event)
 						state.toolCalls = append(state.toolCalls, event)
 						state.lastToolCall = &state.toolCalls[len(state.toolCalls)-1]
