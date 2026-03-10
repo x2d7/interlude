@@ -3,6 +3,7 @@ package chat
 import (
 	"encoding/json"
 	"errors"
+	"sync/atomic"
 )
 
 // eventType represents the type of event
@@ -66,34 +67,35 @@ type EventToolCall struct {
 	CallID string `json:"call_id"`
 	Name   string `json:"name"`
 
-	approval *ApproveWaiter
-	answered bool
-
+	approval   *ApproveWaiter
+	answered   *atomic.Bool
 	onResolved func(callID string, accepted bool)
 }
 
-func (e *EventToolCall) Resolve(accept bool) {
-	if e.answered {
-		return
+func (e *EventToolCall) Resolve(accept bool) error {
+	if e.answered == nil || !e.answered.CompareAndSwap(false, true) {
+		return ErrAlreadyResolved
 	}
-	e.answered = true
 	if e.approval == nil {
-		return
+		return nil
 	}
-
 	if e.onResolved != nil {
 		e.onResolved(e.CallID, accept)
 	}
-
-	verdict := Verdict{Accepted: accept, call: *e}
-	e.approval.Resolve(verdict)
+	e.approval.Resolve(Verdict{Accepted: accept, call: *e})
+	return nil
 }
 
 func (e EventToolCall) getType() eventType { return eventToolCall }
 
 // NewEventToolCall creates a new EventToolCall
 func NewEventToolCall(callID, name string, arguments string) EventToolCall {
-	return EventToolCall{EventBase: EventBase{Content: arguments}, CallID: callID, Name: name}
+	return EventToolCall{
+		EventBase: EventBase{Content: arguments},
+		CallID:    callID,
+		Name:      name,
+		answered:  &atomic.Bool{},
+	}
 }
 
 // EventToolCallResolved spawns when tool call is resolved by the user

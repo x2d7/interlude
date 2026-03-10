@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/x2d7/interlude/chat/tools"
 )
 
@@ -649,7 +651,7 @@ func TestSession_ToolRejected(t *testing.T) {
 		if msg.getType() == eventToolMessage {
 			toolMsg := msg.(EventToolMessage)
 			if toolMsg.CallID == "call-1" && !toolMsg.Success &&
-				toolMsg.Content == "User declined the tool call" {
+				toolMsg.Content == DefaultDeclinedToolMessage {
 				rejectionFound = true
 			}
 		}
@@ -1651,7 +1653,7 @@ func TestSession_ToolMessageEmission_Rejection(t *testing.T) {
 		t.Errorf("Expected CallID 'call-1', got '%s'", toolMessage.CallID)
 	}
 
-	if toolMessage.Content != "User declined the tool call" {
+	if toolMessage.Content != DefaultDeclinedToolMessage {
 		t.Errorf("Expected rejection message, got '%s'", toolMessage.Content)
 	}
 
@@ -2101,4 +2103,114 @@ func TestSession_ToolMessageInHistory(t *testing.T) {
 	if !toolMessageFound {
 		t.Error("Expected EventToolMessage to be added to history")
 	}
+}
+
+func TestSession_ToolCallDuplicationIssue(t *testing.T) {
+	chatTools := tools.NewTools()
+	ch := &Chat{
+		Messages: NewMessages(),
+		Tools:    chatTools,
+	}
+
+	tool, err := tools.NewTool[map[string]string]("test-tool", "Test tool",
+		func(input map[string]string) (string, error) {
+			return "result", nil
+		})
+	if err != nil {
+		t.Fatalf("Failed to create tool: %v", err)
+	}
+	ch.Tools.Add(tool)
+
+	mockClient := NewMultiRoundMockClient([][]StreamEvent{
+		{NewEventToolCall("call-1", "test-tool", `{"key": "value"}`)},
+		{},
+	})
+
+	ctx := context.Background()
+	events := ch.Session(ctx, mockClient)
+
+	var completionEndedEvent *EventCompletionEnded
+	var streamToolCalls []EventToolCall
+
+	// Consume events and resolve tool calls inline to avoid deadlock.
+	// Session blocks in approval.Wait() until verdicts arrive —
+	// so we must Resolve() before the channel can close.
+	for event := range events {
+		switch e := event.(type) {
+		case EventToolCall:
+			streamToolCalls = append(streamToolCalls, e)
+		case EventCompletionEnded:
+			ce := e
+			completionEndedEvent = &ce
+			// Resolve from EventCompletionEnded — first resolve, should fire
+			for _, tc := range ce.ToolCalls {
+				tc := tc
+				tc.Resolve(true)
+			}
+			// Resolve from stream copies — should be no-op due to answered flag
+			for _, tc := range streamToolCalls {
+				tc := tc
+				tc.Resolve(true)
+			}
+		}
+	}
+
+	if completionEndedEvent == nil {
+		t.Fatal("Expected EventCompletionEnded")
+	}
+	if len(streamToolCalls) == 0 {
+		t.Fatal("Expected EventToolCall from stream")
+	}
+
+	t.Run("verify_no_double_execution", func(t *testing.T) {
+		messages := ch.Messages.Snapshot()
+		toolMessageCount := 0
+		for _, msg := range messages {
+			if tm, ok := msg.(EventToolMessage); ok && tm.CallID == "call-1" {
+				toolMessageCount++
+			}
+		}
+		if toolMessageCount != 1 {
+			t.Errorf("Expected 1 tool message, got %d (possible double execution)", toolMessageCount)
+		}
+	})
+}
+
+func TestSession_ToolCall_DoubleResolveFromCopies(t *testing.T) {
+	c := &Chat{
+		Messages: NewMessages(),
+		Tools:    tools.NewTools(),
+	}
+
+	execCount := atomic.Int32{}
+	tool, _ := tools.NewTool[map[string]string]("test-tool", "Test tool",
+		func(input map[string]string) (string, error) {
+			execCount.Add(1)
+			return "result", nil
+		})
+	c.Tools.Add(tool)
+
+	mockClient := NewMultiRoundMockClient([][]StreamEvent{
+		{NewEventToolCall("call-1", "test-tool", `{"key": "value"}`)},
+		{},
+	})
+
+	ctx := context.Background()
+	events := c.Session(ctx, mockClient)
+
+	for event := range events {
+		switch e := event.(type) {
+		case EventToolCall:
+			err := e.Resolve(true)
+			assert.NoError(t, err)
+		case EventCompletionEnded:
+			if len(e.ToolCalls) > 0 {
+				// копия из EventCompletionEnded — уже резолвнута из стрима
+				err := e.ToolCalls[0].Resolve(true)
+				assert.ErrorIs(t, err, ErrAlreadyResolved)
+			}
+		}
+	}
+
+	assert.Equal(t, int32(1), execCount.Load(), "tool must be executed exactly once")
 }

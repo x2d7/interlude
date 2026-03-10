@@ -11,6 +11,8 @@ import (
 type Chat struct {
 	Messages *Messages
 	Tools    *tools.Tools
+
+	DeclinedToolMessage string // default: "Tool call declined"
 }
 
 // Client interface represents the LLM connector client

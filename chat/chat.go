@@ -7,6 +7,8 @@ import (
 	"github.com/x2d7/interlude/chat/tools"
 )
 
+const DefaultDeclinedToolMessage = "Tool call declined"
+
 func (c *Chat) Complete(ctx context.Context, client Client) <-chan StreamEvent {
 	result := make(chan StreamEvent, 16)
 
@@ -261,7 +263,11 @@ func (c *Chat) handleCompletionEnd(ctx context.Context, state *sessionState) (pr
 			callResult, success := c.Tools.Execute(call.Name, call.Content)
 			toolMessage = NewEventToolMessage(call.CallID, callResult, success)
 		} else {
-			toolMessage = NewEventToolMessage(call.CallID, "User declined the tool call", false)
+			msg := c.DeclinedToolMessage
+			if msg == "" {
+				msg = DefaultDeclinedToolMessage
+			}
+			toolMessage = NewEventToolMessage(call.CallID, msg, false)
 		}
 		// adding tool message to the chat
 		c.AppendEvent(toolMessage)
