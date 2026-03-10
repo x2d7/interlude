@@ -255,11 +255,20 @@ func (c *Chat) handleCompletionEnd(ctx context.Context, state *sessionState) (pr
 	for verdict := range verdicts {
 		call := verdict.call
 
+		var toolMessage EventToolMessage
+
 		if verdict.Accepted {
 			callResult, success := c.Tools.Execute(call.Name, call.Content)
-			c.AppendEvent(NewEventToolMessage(call.CallID, callResult, success))
+			toolMessage = NewEventToolMessage(call.CallID, callResult, success)
 		} else {
-			c.AppendEvent(NewEventToolMessage(call.CallID, "User declined the tool call", false))
+			toolMessage = NewEventToolMessage(call.CallID, "User declined the tool call", false)
+		}
+		// adding tool message to the chat
+		c.AppendEvent(toolMessage)
+
+		// sending tool message
+		if !state.send(toolMessage) {
+			return
 		}
 	}
 
