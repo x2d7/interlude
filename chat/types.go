@@ -11,6 +11,8 @@ import (
 type Chat struct {
 	Messages *Messages
 	Tools    *tools.Tools
+
+	DeclinedToolMessage string // default: "Tool call declined"
 }
 
 // Client interface represents the LLM connector client
@@ -24,10 +26,10 @@ type Client interface {
 	//   - Must synchronize all complete message events from chat.Messages to client params
 	//   - Must synchronize tools from chat.Tools to client params
 	//   - Must preserve client-specific settings (model, API key, endpoint, etc.)
-	//   - Should NOT synchronize streaming-only events (e.g., EventNewToken, EventCompletionEnded)
-	//     - Only full message events should be converted: EventNewUserMessage,
-	//       EventNewAssistantMessage, EventNewSystemMessage, EventNewToolMessage,
-	//       EventNewToolCall, EventNewRefusal
+	//   - Should NOT synchronize streaming-only events (e.g., EventToken, EventCompletionEnded)
+	//     - Only full message events should be converted: EventUserMessage,
+	//       EventAssistantMessage, EventSystemMessage, EventToolMessage,
+	//       EventToolCall, EventRefusal
 	SyncInput(chat *Chat) Client
 }
 
@@ -69,22 +71,24 @@ type Stream[T any] interface {
 
 type Verdict struct {
 	Accepted bool
-	call     EventNewToolCall
+	call     EventToolCall
 }
 
 type ApproveWaiter struct {
 	verdicts chan Verdict
+	ctx      context.Context
 }
 
-func NewApproveWaiter() *ApproveWaiter {
+func NewApproveWaiter(ctx context.Context) *ApproveWaiter {
 	return &ApproveWaiter{
 		verdicts: make(chan Verdict),
+		ctx:      ctx,
 	}
 }
 
 // Attach wires the event to the waiter
 // Call this on the local `event` value before appending it to toolCalls.
-func (a *ApproveWaiter) Attach(e *EventNewToolCall) {
+func (a *ApproveWaiter) Attach(e *EventToolCall) {
 	e.approval = a
 }
 
@@ -136,5 +140,9 @@ func (a *ApproveWaiter) Resolve(verdict Verdict) {
 // resolveSync is a blocking version of Resolve for testing purposes.
 // It waits until the verdict is read from the channel.
 func (a *ApproveWaiter) resolveSync(verdict Verdict) {
-	a.verdicts <- verdict
+	select {
+	case a.verdicts <- verdict:
+	case <-a.ctx.Done():
+		return
+	}
 }

@@ -10,7 +10,6 @@ import (
 
 	"github.com/joho/godotenv"
 	"github.com/x2d7/interlude/chat"
-	"github.com/x2d7/interlude/chat/tools"
 	openai "github.com/x2d7/interlude/connect/openai"
 )
 
@@ -64,20 +63,20 @@ func main() {
 		for event := range c.SendUserStream(ctx, &client, input) {
 			switch v := event.(type) {
 
-			case chat.EventNewToken:
+			case chat.EventToken:
 				fmt.Print(v.Content)
 
-			case chat.EventNewRefusal:
+			case chat.EventRefusal:
 				// Provider-sensitive event. Some providers may not support it.
 				fmt.Print(colorize(yellow, v.Content))
 
-			case chat.EventNewToolCall:
+			case chat.EventToolCall:
 				fmt.Printf(colorize(dim, "\n[tool call] %s(%s)\n"), v.Name, v.Content)
 
 			case chat.EventCompletionEnded:
 				// nothing to do, stream will close
 
-			case chat.EventNewError:
+			case chat.EventError:
 				fmt.Fprintf(os.Stderr, "\n%s %s\n", colorize(bold+red, "error:"), v.Error)
 				os.Exit(1)
 			}

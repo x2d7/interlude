@@ -6,4 +6,5 @@ var (
 	ErrUnsupportedSender        = errors.New("unsupported sender type")
 	ErrNilStreaming             = errors.New("streaming object is nil")
 	ErrAssistantMessageNotFound = errors.New("assistant message not found")
+	ErrAlreadyResolved          = errors.New("tool call already resolved")
 )

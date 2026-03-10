@@ -5,6 +5,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"go.uber.org/goleak"
 )
 
 // ==================== Messages Tests ====================
@@ -24,7 +26,7 @@ func TestNewMessages(t *testing.T) {
 
 func TestMessages_AddEvent_Single(t *testing.T) {
 	m := NewMessages()
-	event := NewEventNewUserMessage("Hello")
+	event := NewEventUserMessage("Hello")
 
 	m.AddEvent(event)
 
@@ -35,9 +37,9 @@ func TestMessages_AddEvent_Single(t *testing.T) {
 
 func TestMessages_AddEvent_Multiple(t *testing.T) {
 	m := NewMessages()
-	event1 := NewEventNewUserMessage("Hello")
-	event2 := NewEventNewAssistantMessage("Hi there")
-	event3 := NewEventNewToken("test")
+	event1 := NewEventUserMessage("Hello")
+	event2 := NewEventAssistantMessage("Hi there")
+	event3 := NewEventToken("test")
 
 	m.AddEvent(event1)
 	m.AddEvent(event2)
@@ -57,7 +59,7 @@ func TestMessages_AddEvent_Concurrent(t *testing.T) {
 		wg.Add(1)
 		go func(n int) {
 			defer wg.Done()
-			m.AddEvent(NewEventNewToken("token"))
+			m.AddEvent(NewEventToken("token"))
 		}(i)
 	}
 
@@ -79,14 +81,14 @@ func TestMessages_Snapshot_Empty(t *testing.T) {
 
 func TestMessages_Snapshot_ReturnsCopy(t *testing.T) {
 	m := NewMessages()
-	originalEvent := NewEventNewUserMessage("Original")
+	originalEvent := NewEventUserMessage("Original")
 	m.AddEvent(originalEvent)
 
 	// Get snapshot
 	snapshot1 := m.Snapshot()
 
 	// Modify original
-	m.AddEvent(NewEventNewUserMessage("Modified"))
+	m.AddEvent(NewEventUserMessage("Modified"))
 
 	// Get another snapshot
 	snapshot2 := m.Snapshot()
@@ -104,7 +106,7 @@ func TestMessages_Snapshot_ReturnsCopy(t *testing.T) {
 
 func TestMessages_Snapshot_ModifyCopyDoesNotAffectOriginal(t *testing.T) {
 	m := NewMessages()
-	event := NewEventNewUserMessage("Test")
+	event := NewEventUserMessage("Test")
 	m.AddEvent(event)
 
 	// Get snapshot
@@ -113,7 +115,7 @@ func TestMessages_Snapshot_ModifyCopyDoesNotAffectOriginal(t *testing.T) {
 	// Modify snapshot directly (bypass AddEvent to test internal copy)
 	// Since we can't modify the slice directly (it's a value type),
 	// we verify the original is not affected by adding more events
-	m.AddEvent(NewEventNewUserMessage("Another"))
+	m.AddEvent(NewEventUserMessage("Another"))
 
 	if len(snapshot) != 1 {
 		t.Fatalf("Expected snapshot to still have 1 event, got %d", len(snapshot))
@@ -127,7 +129,8 @@ func TestMessages_Snapshot_ModifyCopyDoesNotAffectOriginal(t *testing.T) {
 // ==================== ApproveWaiter Tests ====================
 
 func TestNewApproveWaiter(t *testing.T) {
-	w := NewApproveWaiter()
+	ctx := context.Background()
+	w := NewApproveWaiter(ctx)
 	if w == nil {
 		t.Fatal("NewApproveWaiter returned nil")
 	}
@@ -137,8 +140,10 @@ func TestNewApproveWaiter(t *testing.T) {
 }
 
 func TestApproveWaiter_Attach(t *testing.T) {
-	w := NewApproveWaiter()
-	event := NewEventNewToolCall("call-id", "tool-name", `{"arg": "value"}`)
+	event := NewEventToolCall("call-id", "tool-name", `{"arg": "value"}`)
+
+	ctx := context.Background()
+	w := NewApproveWaiter(ctx)
 
 	w.Attach(&event)
 
@@ -148,8 +153,8 @@ func TestApproveWaiter_Attach(t *testing.T) {
 }
 
 func TestApproveWaiter_Wait_ZeroAmount(t *testing.T) {
-	w := NewApproveWaiter()
 	ctx := context.Background()
+	w := NewApproveWaiter(ctx)
 
 	verdicts := w.Wait(ctx, 0)
 
@@ -165,8 +170,8 @@ func TestApproveWaiter_Wait_ZeroAmount(t *testing.T) {
 }
 
 func TestApproveWaiter_Wait_SingleVerdict(t *testing.T) {
-	w := NewApproveWaiter()
 	ctx, cancel := context.WithCancel(context.Background())
+	w := NewApproveWaiter(ctx)
 	defer cancel()
 
 	verdicts := w.Wait(ctx, 1)
@@ -186,8 +191,8 @@ func TestApproveWaiter_Wait_SingleVerdict(t *testing.T) {
 }
 
 func TestApproveWaiter_Wait_MultipleVerdicts(t *testing.T) {
-	w := NewApproveWaiter()
 	ctx, cancel := context.WithCancel(context.Background())
+	w := NewApproveWaiter(ctx)
 	defer cancel()
 
 	amount := 3
@@ -211,8 +216,8 @@ func TestApproveWaiter_Wait_MultipleVerdicts(t *testing.T) {
 }
 
 func TestApproveWaiter_Wait_ContextCancellation(t *testing.T) {
-	w := NewApproveWaiter()
 	ctx, cancel := context.WithCancel(context.Background())
+	w := NewApproveWaiter(ctx)
 
 	verdicts := w.Wait(ctx, 5)
 
@@ -231,8 +236,8 @@ func TestApproveWaiter_Wait_ContextCancellation(t *testing.T) {
 }
 
 func TestApproveWaiter_Resolve_AcceptTrue(t *testing.T) {
-	w := NewApproveWaiter()
 	ctx, cancel := context.WithCancel(context.Background())
+	w := NewApproveWaiter(ctx)
 	defer cancel()
 
 	verdicts := w.Wait(ctx, 1)
@@ -250,8 +255,9 @@ func TestApproveWaiter_Resolve_AcceptTrue(t *testing.T) {
 }
 
 func TestApproveWaiter_Resolve_AcceptFalse(t *testing.T) {
-	w := NewApproveWaiter()
+
 	ctx, cancel := context.WithCancel(context.Background())
+	w := NewApproveWaiter(ctx)
 	defer cancel()
 
 	verdicts := w.Wait(ctx, 1)
@@ -268,16 +274,17 @@ func TestApproveWaiter_Resolve_AcceptFalse(t *testing.T) {
 	}
 }
 
-func TestEventNewToolCall_Resolve_NoApproval(t *testing.T) {
-	event := NewEventNewToolCall("call-id", "tool-name", `{}`)
+func TestEventToolCall_Resolve_NoApproval(t *testing.T) {
+	event := NewEventToolCall("call-id", "tool-name", `{}`)
 
 	// Should not panic when called without approval attached
 	event.Resolve(true)
 }
 
-func TestEventNewToolCall_Resolve_DoubleCall(t *testing.T) {
-	w := NewApproveWaiter()
-	event := NewEventNewToolCall("call-id", "tool-name", `{}`)
+func TestEventToolCall_Resolve_DoubleCall(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	w := NewApproveWaiter(ctx)
+	event := NewEventToolCall("call-id", "tool-name", `{}`)
 
 	w.Attach(&event)
 
@@ -286,7 +293,6 @@ func TestEventNewToolCall_Resolve_DoubleCall(t *testing.T) {
 
 	// Second resolve should be ignored (answered is now true)
 	// We verify this by checking that only one verdict is received
-	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	verdicts := w.Wait(ctx, 1)
@@ -309,8 +315,8 @@ func TestEventNewToolCall_Resolve_DoubleCall(t *testing.T) {
 }
 
 func TestApproveWaiter_Resolve_Concurrent(t *testing.T) {
-	w := NewApproveWaiter()
 	ctx, cancel := context.WithCancel(context.Background())
+	w := NewApproveWaiter(ctx)
 	defer cancel()
 
 	amount := 10
@@ -346,8 +352,8 @@ func TestApproveWaiter_Resolve_Concurrent(t *testing.T) {
 // inside the collection loop (not immediately after Wait)
 // This covers: case <-ctx.Done(): return inside the for loop
 func TestApproveWaiter_Wait_CtxDoneDuringCollection(t *testing.T) {
-	w := NewApproveWaiter()
 	ctx, cancel := context.WithCancel(context.Background())
+	w := NewApproveWaiter(ctx)
 
 	// Channel for communication between sender and reader goroutines
 	// sender -> ready to send next
@@ -421,8 +427,8 @@ func TestApproveWaiter_Wait_CtxDoneDuringCollection(t *testing.T) {
 // TestApproveWaiter_Wait_InnerCtxDone tests ctx.Done() triggered inside the inner select
 // This covers: after receiving verdict from a.verdicts, ctx.Done() in inner select causes return
 func TestApproveWaiter_Wait_InnerCtxDone(t *testing.T) {
-	w := NewApproveWaiter()
 	ctx, cancel := context.WithCancel(context.Background())
+	w := NewApproveWaiter(ctx)
 	defer cancel()
 
 	resolved := make(chan struct{})
@@ -454,4 +460,19 @@ func TestApproveWaiter_Wait_InnerCtxDone(t *testing.T) {
 	case <-time.After(500 * time.Millisecond):
 		t.Fatal("timeout waiting for worker to finish after cancel")
 	}
+}
+
+func TestApproveWaiter_ResolveLeaksGoroutine(t *testing.T) {
+	defer goleak.VerifyNone(t, goleak.IgnoreCurrent())
+
+	ctx, cancel := context.WithCancel(context.Background())
+	aw := NewApproveWaiter(ctx)
+
+	// Calling Resolve without a reader — goroutine will be spawned via resolveSync
+	aw.Resolve(Verdict{Accepted: true})
+
+	// Cancelling context — goroutine should exit via ctx.Done()
+	cancel()
+
+	// If goroutine leaked, goleak.VerifyNone will catch it and fail the test
 }
