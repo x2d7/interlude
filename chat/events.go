@@ -66,6 +66,8 @@ type EventToolCall struct {
 
 	approval *ApproveWaiter
 	answered bool
+
+	onResolved func(callID string, accepted bool)
 }
 
 func (e *EventToolCall) Resolve(accept bool) {
@@ -76,6 +78,11 @@ func (e *EventToolCall) Resolve(accept bool) {
 	if e.approval == nil {
 		return
 	}
+
+	if e.onResolved != nil {
+		e.onResolved(e.CallID, accept)
+	}
+
 	verdict := Verdict{Accepted: accept, call: *e}
 	e.approval.Resolve(verdict)
 }
