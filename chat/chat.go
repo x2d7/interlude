@@ -240,7 +240,7 @@ func (c *Chat) handleCompletionEnd(ctx context.Context, state *sessionState) (pr
 	}
 
 	// ending current completion
-	if !state.send(NewEventCompletionEnded()) {
+	if !state.send(NewEventCompletionEnded(state.toolCalls)) {
 		return
 	}
 

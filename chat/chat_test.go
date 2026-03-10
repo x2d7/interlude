@@ -780,7 +780,6 @@ func TestHelpers_SendUserStream(t *testing.T) {
 
 	mockClient := NewMockClient()
 	mockClient.SetStreamingEvents([]StreamEvent{
-		NewEventCompletionEnded(),
 	})
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -812,7 +811,6 @@ func TestHelpers_SendAssistantStream(t *testing.T) {
 
 	mockClient := NewMockClient()
 	mockClient.SetStreamingEvents([]StreamEvent{
-		NewEventCompletionEnded(),
 	})
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -844,7 +842,6 @@ func TestHelpers_SendSystemStream(t *testing.T) {
 
 	mockClient := NewMockClient()
 	mockClient.SetStreamingEvents([]StreamEvent{
-		NewEventCompletionEnded(),
 	})
 
 	ctx, cancel := context.WithCancel(context.Background())

@@ -50,13 +50,14 @@ func NewEventCompletionStart() EventCompletionStart {
 
 // EventCompletionEnded represents a completion ended event
 // TODO: добавить finish_reason
-// TODO: добавить список вызовов инструментов
-type EventCompletionEnded struct{}
+type EventCompletionEnded struct {
+	ToolCalls []EventToolCall `json:"tool_calls,omitempty"`
+}
 
 func (e EventCompletionEnded) getType() eventType { return eventCompletionEnded }
 
-func NewEventCompletionEnded() EventCompletionEnded {
-	return EventCompletionEnded{}
+func NewEventCompletionEnded(toolCalls []EventToolCall) EventCompletionEnded {
+	return EventCompletionEnded{ToolCalls: toolCalls}
 }
 
 // EventToolCall represents a tool call event

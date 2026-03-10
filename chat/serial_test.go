@@ -45,7 +45,7 @@ func TestMarshalUnmarshalEvent_RoundTrip(t *testing.T) {
 		},
 		{
 			name:  "EventCompletionEnded",
-			event: NewEventCompletionEnded(),
+			event: NewEventCompletionEnded(nil),
 			check: func(t *testing.T, result StreamEvent) {
 				_, ok := result.(EventCompletionEnded)
 				require.True(t, ok)
