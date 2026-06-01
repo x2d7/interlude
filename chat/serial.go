@@ -34,6 +34,8 @@ func UnmarshalEvent(data []byte) (StreamEvent, error) {
 	switch env.Type {
 	case eventToken:
 		return unmarshalPayload[EventToken](env.Payload)
+	case eventThinking:
+		return unmarshalPayload[EventThinking](env.Payload)
 	case eventToolCall:
 		return unmarshalPayload[EventToolCall](env.Payload)
 	case eventToolCallResolved:

@@ -55,7 +55,7 @@ func TestMessages_AddEvent_Concurrent(t *testing.T) {
 	wg := sync.WaitGroup{}
 	iterations := 100
 
-	for i := 0; i < iterations; i++ {
+	for i := range iterations {
 		wg.Add(1)
 		go func(n int) {
 			defer wg.Done()
@@ -199,7 +199,7 @@ func TestApproveWaiter_Wait_MultipleVerdicts(t *testing.T) {
 	verdicts := w.Wait(ctx, amount)
 
 	// Resolve multiple verdicts
-	for i := 0; i < amount; i++ {
+	for i := range amount {
 		w.Resolve(Verdict{Accepted: i%2 == 0})
 	}
 
@@ -324,7 +324,7 @@ func TestApproveWaiter_Resolve_Concurrent(t *testing.T) {
 
 	// Resolve from multiple goroutines
 	var wg sync.WaitGroup
-	for i := 0; i < amount; i++ {
+	for i := range amount {
 		wg.Add(1)
 		go func(n int) {
 			defer wg.Done()
@@ -403,7 +403,7 @@ func TestApproveWaiter_Wait_CtxDoneDuringCollection(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		for i := 0; i < 5; i++ {
+		for range 5 {
 			w.Resolve(Verdict{Accepted: true})
 
 			select {

@@ -2,6 +2,7 @@ package openai_connect
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"testing"
 
@@ -77,6 +78,17 @@ func makeChunk(content, refusal string, toolCalls []openai.ChatCompletionChunkCh
 			},
 		},
 	}
+}
+
+// makeChunkWithReasoning builds a chunk by unmarshaling raw JSON to properly
+// populate the ExtraFields (including "reasoning_content") via the SDK's unmarshaler.
+func makeChunkWithReasoning(content, reasoning string) openai.ChatCompletionChunk {
+	rawJSON := `{"choices":[{"delta":{"content":"` + content + `","reasoning_content":"` + reasoning + `"}}]}`
+	var chunk openai.ChatCompletionChunk
+	if err := json.Unmarshal([]byte(rawJSON), &chunk); err != nil {
+		panic(err)
+	}
+	return chunk
 }
 
 // newStream creates an OpenAIStream backed by the provided mock.
@@ -207,6 +219,55 @@ func TestHandleRawChunk_EmptyDelta_ReturnsEmptyList(t *testing.T) {
 	}
 	if len(events) != 0 {
 		t.Fatalf("Expected empty events list, got %d", len(events))
+	}
+}
+
+func TestHandleRawChunk_ReasoningOnly(t *testing.T) {
+	s := newStream(newMockSSEStream(nil, nil))
+	chunk := makeChunkWithReasoning("", "let me think...")
+
+	events, err := s._handleRawChunk(chunk)
+
+	if err != nil {
+		t.Fatalf("Expected no error, got %v", err)
+	}
+	if len(events) != 1 {
+		t.Fatalf("Expected 1 event, got %d", len(events))
+	}
+	thinking, ok := events[0].(chat.EventThinking)
+	if !ok {
+		t.Fatalf("Expected EventThinking, got %T", events[0])
+	}
+	if thinking.Content != "let me think..." {
+		t.Errorf("Expected content 'let me think...', got '%s'", thinking.Content)
+	}
+}
+
+func TestHandleRawChunk_ReasoningAndContent(t *testing.T) {
+	s := newStream(newMockSSEStream(nil, nil))
+	chunk := makeChunkWithReasoning("Hello", "thinking...")
+
+	events, err := s._handleRawChunk(chunk)
+
+	if err != nil {
+		t.Fatalf("Expected no error, got %v", err)
+	}
+	if len(events) != 2 {
+		t.Fatalf("Expected 2 events (reasoning+content), got %d", len(events))
+	}
+	thinking, ok := events[0].(chat.EventThinking)
+	if !ok {
+		t.Fatalf("Expected EventThinking at index 0, got %T", events[0])
+	}
+	if thinking.Content != "thinking..." {
+		t.Errorf("Expected reasoning 'thinking...', got '%s'", thinking.Content)
+	}
+	token, ok := events[1].(chat.EventToken)
+	if !ok {
+		t.Fatalf("Expected EventToken at index 1, got %T", events[1])
+	}
+	if token.Content != "Hello" {
+		t.Errorf("Expected content 'Hello', got '%s'", token.Content)
 	}
 }
 

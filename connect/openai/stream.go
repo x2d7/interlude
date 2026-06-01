@@ -2,6 +2,7 @@ package openai_connect
 
 import (
 	"context"
+	"strings"
 
 	"github.com/openai/openai-go/v3"
 	"github.com/x2d7/interlude/chat"
@@ -111,6 +112,16 @@ func (s *OpenAIStream) _handleRawChunk(chunk openai.ChatCompletionChunk) ([]chat
 
 	// TODO: Использование FinishReason
 	_ = choice.FinishReason
+
+	// Extract reasoning from ExtraFields (not exposed as dedicated field in SDK)
+	if rf, ok := delta.JSON.ExtraFields["reasoning_content"]; ok {
+		if raw := rf.Raw(); raw != "" {
+			reasoning := strings.Trim(raw, "\"")
+			if reasoning != "" {
+				result = append(result, chat.NewEventThinking(reasoning))
+			}
+		}
+	}
 
 	if content != "" {
 		result = append(result, chat.NewEventToken(content))

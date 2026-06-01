@@ -546,6 +546,53 @@ func TestSession_Refusal(t *testing.T) {
 	}
 }
 
+// TestSession_Thinking tests that thinking tokens are accumulated and added to history
+func TestSession_Thinking(t *testing.T) {
+	chat := &Chat{
+		Messages: NewMessages(),
+		Tools:    &tools.Tools{},
+	}
+
+	mockClient := NewMockClient()
+	mockClient.SetStreamingEvents([]StreamEvent{
+		NewEventThinking("let me "),
+		NewEventThinking("think..."),
+		NewEventToken("answer"),
+	})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	events := chat.Session(ctx, mockClient)
+
+	// Drain
+	for range events {
+		// Just drain
+	}
+
+	cancel()
+
+	// Check that thinking tokens were accumulated into assistant message
+	messages := chat.Messages.Snapshot()
+
+	var thinkingMsg, assistantMsg string
+	for _, msg := range messages {
+		if am, ok := msg.(EventAssistantMessage); ok {
+			if thinkingMsg == "" {
+				thinkingMsg = am.Content
+			} else {
+				assistantMsg = am.Content
+			}
+		}
+	}
+
+	if thinkingMsg != "let me think..." {
+		t.Errorf("Expected thinking message 'let me think...', got '%s'", thinkingMsg)
+	}
+
+	if assistantMsg != "answer" {
+		t.Errorf("Expected assistant message 'answer', got '%s'", assistantMsg)
+	}
+}
+
 // ==================== Session Tests - Tool Execution ====================
 
 // TestSession_ToolAccepted tests tool execution when accepted
@@ -2144,12 +2191,10 @@ func TestSession_ToolCallDuplicationIssue(t *testing.T) {
 			completionEndedEvent = &ce
 			// Resolve from EventCompletionEnded — first resolve, should fire
 			for _, tc := range ce.ToolCalls {
-				tc := tc
 				tc.Resolve(true)
 			}
 			// Resolve from stream copies — should be no-op due to answered flag
 			for _, tc := range streamToolCalls {
-				tc := tc
 				tc.Resolve(true)
 			}
 		}

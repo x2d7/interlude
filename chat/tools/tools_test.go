@@ -787,7 +787,7 @@ func TestNewTool_PointerType(t *testing.T) {
 
 func TestNewTool_InterfaceType(t *testing.T) {
 	type InterfaceStruct struct {
-		Data interface{} `json:"data"`
+		Data any `json:"data"`
 	}
 
 	tool, err := NewTool("interface_test", "test interface type", func(s InterfaceStruct) (string, error) {

@@ -13,6 +13,7 @@ const (
 	// events produced by the text completion
 
 	eventToken           eventType = "token"
+	eventThinking        eventType = "thinking"
 	eventToolCall        eventType = "tool_call"
 	eventToolCallToken   eventType = "tool_call_token"
 	eventRefusal         eventType = "refusal"
@@ -166,6 +167,18 @@ func (e EventToken) getType() eventType { return eventToken }
 // NewEventToken creates a new EventToken
 func NewEventToken(content string) EventToken {
 	return EventToken{EventBase: EventBase{Content: content}}
+}
+
+// EventThinking represents a thinking/reasoning token event
+type EventThinking struct {
+	EventBase
+}
+
+func (e EventThinking) getType() eventType { return eventThinking }
+
+// NewEventThinking creates a new EventThinking
+func NewEventThinking(content string) EventThinking {
+	return EventThinking{EventBase: EventBase{Content: content}}
 }
 
 // EventUserMessage represents a user message event

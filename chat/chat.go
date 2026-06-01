@@ -52,14 +52,16 @@ type sessionState struct {
 
 	// session state variables
 
-	builder      strings.Builder
-	toolCalls    []EventToolCall
-	lastToolCall *EventToolCall
-	approval     *ApproveWaiter
+	builder         strings.Builder
+	thinkingBuilder strings.Builder
+	toolCalls       []EventToolCall
+	lastToolCall    *EventToolCall
+	approval        *ApproveWaiter
 }
 
 func (s *sessionState) reset() {
 	s.builder.Reset()
+	s.thinkingBuilder.Reset()
 	s.toolCalls = s.toolCalls[:0]
 	s.lastToolCall = nil
 	s.approval = NewApproveWaiter(s.ctx)
@@ -206,6 +208,8 @@ func (c *Chat) Session(ctx context.Context, client Client) <-chan StreamEvent {
 					}
 				case EventRefusal:
 					c.AppendEvent(event)
+				case EventThinking:
+					state.thinkingBuilder.WriteString(event.Content)
 				}
 
 				// skipping event
@@ -226,7 +230,10 @@ func (c *Chat) Session(ctx context.Context, client Client) <-chan StreamEvent {
 
 func (c *Chat) handleCompletionEnd(ctx context.Context, state *sessionState) (proceed bool) {
 	proceed = false
-	// adding collected events to the chat (assistant's tokens and tool calls)
+	// adding collected events to the chat (reasoning, assistant's tokens and tool calls)
+	if state.thinkingBuilder.Len() != 0 {
+		c.AppendEvent(NewEventAssistantMessage(state.thinkingBuilder.String()))
+	}
 	if state.builder.Len() != 0 {
 		c.AppendEvent(NewEventAssistantMessage(state.builder.String()))
 	}
