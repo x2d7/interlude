@@ -570,22 +570,21 @@ func TestSession_Thinking(t *testing.T) {
 
 	cancel()
 
-	// Check that thinking tokens were accumulated into assistant message
+	// Check that thinking tokens were accumulated into reasoning message
 	messages := chat.Messages.Snapshot()
 
-	var thinkingMsg, assistantMsg string
+	var reasoningMsg, assistantMsg string
 	for _, msg := range messages {
-		if am, ok := msg.(EventAssistantMessage); ok {
-			if thinkingMsg == "" {
-				thinkingMsg = am.Content
-			} else {
-				assistantMsg = am.Content
-			}
+		switch m := msg.(type) {
+		case EventReasoningMessage:
+			reasoningMsg = m.Content
+		case EventAssistantMessage:
+			assistantMsg = m.Content
 		}
 	}
 
-	if thinkingMsg != "let me think..." {
-		t.Errorf("Expected thinking message 'let me think...', got '%s'", thinkingMsg)
+	if reasoningMsg != "let me think..." {
+		t.Errorf("Expected reasoning message 'let me think...', got '%s'", reasoningMsg)
 	}
 
 	if assistantMsg != "answer" {

@@ -25,6 +25,7 @@ const (
 	eventToolCallResolved eventType = "tool_call_resolved"
 	eventUserMessage      eventType = "user_message"
 	eventAssistantMessage eventType = "assistant_message"
+	eventReasoningMessage eventType = "reasoning_message"
 	eventSystemMessage    eventType = "system_message"
 	eventToolMessage      eventType = "tool_message"
 
@@ -203,6 +204,18 @@ func (e EventAssistantMessage) getType() eventType { return eventAssistantMessag
 // NewEventAssistantMessage creates a new EventAssistantMessage
 func NewEventAssistantMessage(content string) EventAssistantMessage {
 	return EventAssistantMessage{EventBase: EventBase{Content: content}}
+}
+
+// EventReasoningMessage represents a reasoning message event (accumulated thinking content)
+type EventReasoningMessage struct {
+	EventBase
+}
+
+func (e EventReasoningMessage) getType() eventType { return eventReasoningMessage }
+
+// NewEventReasoningMessage creates a new EventReasoningMessage
+func NewEventReasoningMessage(content string) EventReasoningMessage {
+	return EventReasoningMessage{EventBase: EventBase{Content: content}}
 }
 
 // EventSystemMessage represents a system message event
