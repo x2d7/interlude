@@ -2191,12 +2191,10 @@ func TestSession_ToolCallDuplicationIssue(t *testing.T) {
 			completionEndedEvent = &ce
 			// Resolve from EventCompletionEnded — first resolve, should fire
 			for _, tc := range ce.ToolCalls {
-				tc := tc
 				tc.Resolve(true)
 			}
 			// Resolve from stream copies — should be no-op due to answered flag
 			for _, tc := range streamToolCalls {
-				tc := tc
 				tc.Resolve(true)
 			}
 		}
