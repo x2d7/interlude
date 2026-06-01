@@ -3,7 +3,7 @@ module github.com/x2d7/interlude
 go 1.24.11
 
 require (
-	github.com/openai/openai-go/v3 v3.17.0
+	github.com/openai/openai-go/v3 v3.37.0
 	github.com/stretchr/testify v1.8.1
 )
 

@@ -24,6 +24,15 @@ func TestMarshalUnmarshalEvent_RoundTrip(t *testing.T) {
 			},
 		},
 		{
+			name:  "EventThinking",
+			event: NewEventThinking("let me think..."),
+			check: func(t *testing.T, result StreamEvent) {
+				e, ok := result.(EventThinking)
+				require.True(t, ok)
+				assert.Equal(t, "let me think...", e.Content)
+			},
+		},
+		{
 			name:  "EventToolCall",
 			event: NewEventToolCall("call-123", "my_tool", `{"key":"value"}`),
 			check: func(t *testing.T, result StreamEvent) {
