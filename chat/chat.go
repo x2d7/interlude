@@ -52,11 +52,11 @@ type sessionState struct {
 
 	// session state variables
 
-	builder        strings.Builder
+	builder         strings.Builder
 	thinkingBuilder strings.Builder
-	toolCalls      []EventToolCall
-	lastToolCall   *EventToolCall
-	approval       *ApproveWaiter
+	toolCalls       []EventToolCall
+	lastToolCall    *EventToolCall
+	approval        *ApproveWaiter
 }
 
 func (s *sessionState) reset() {
