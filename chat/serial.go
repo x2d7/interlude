@@ -52,6 +52,8 @@ func UnmarshalEvent(data []byte) (StreamEvent, error) {
 		return unmarshalPayload[EventUserMessage](env.Payload)
 	case eventAssistantMessage:
 		return unmarshalPayload[EventAssistantMessage](env.Payload)
+	case eventReasoningMessage:
+		return unmarshalPayload[EventReasoningMessage](env.Payload)
 	case eventSystemMessage:
 		return unmarshalPayload[EventSystemMessage](env.Payload)
 	case eventToolMessage:

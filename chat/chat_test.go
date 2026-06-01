@@ -570,22 +570,21 @@ func TestSession_Thinking(t *testing.T) {
 
 	cancel()
 
-	// Check that thinking tokens were accumulated into assistant message
+	// Check that thinking tokens were accumulated into reasoning message
 	messages := chat.Messages.Snapshot()
 
-	var thinkingMsg, assistantMsg string
+	var reasoningMsg, assistantMsg string
 	for _, msg := range messages {
-		if am, ok := msg.(EventAssistantMessage); ok {
-			if thinkingMsg == "" {
-				thinkingMsg = am.Content
-			} else {
-				assistantMsg = am.Content
-			}
+		switch m := msg.(type) {
+		case EventReasoningMessage:
+			reasoningMsg = m.Content
+		case EventAssistantMessage:
+			assistantMsg = m.Content
 		}
 	}
 
-	if thinkingMsg != "let me think..." {
-		t.Errorf("Expected thinking message 'let me think...', got '%s'", thinkingMsg)
+	if reasoningMsg != "let me think..." {
+		t.Errorf("Expected reasoning message 'let me think...', got '%s'", reasoningMsg)
 	}
 
 	if assistantMsg != "answer" {
@@ -604,7 +603,7 @@ func TestSession_ToolAccepted(t *testing.T) {
 	}
 
 	// Add a test tool
-	tool, err := tools.NewTool[map[string]string]("test-tool", "Test tool",
+	tool, err := tools.NewTool("test-tool", "Test tool",
 		func(input map[string]string) (string, error) {
 			return "success: " + input["key"], nil
 		})
@@ -660,7 +659,7 @@ func TestSession_ToolRejected(t *testing.T) {
 		Tools:    chatTools,
 	}
 
-	tool, err := tools.NewTool[map[string]string]("test-tool", "Test tool",
+	tool, err := tools.NewTool("test-tool", "Test tool",
 		func(input map[string]string) (string, error) {
 			return "should not be called", nil
 		})
@@ -995,7 +994,7 @@ func TestSession_ContextCancelledWhileWaitingForApproval(t *testing.T) {
 		Tools:    chatTools,
 	}
 
-	tool, err := tools.NewTool[map[string]string]("test-tool", "Test tool",
+	tool, err := tools.NewTool("test-tool", "Test tool",
 		func(input map[string]string) (string, error) {
 			return "result", nil
 		})
@@ -1052,7 +1051,7 @@ func TestSession_ContextCancelledBetweenRounds(t *testing.T) {
 		Tools:    chatTools,
 	}
 
-	tool, err := tools.NewTool[map[string]string]("test-tool", "Test tool",
+	tool, err := tools.NewTool("test-tool", "Test tool",
 		func(input map[string]string) (string, error) {
 			return "result", nil
 		})
@@ -1108,7 +1107,7 @@ func TestSession_ToolCallAssembly_Basic(t *testing.T) {
 		Tools:    chatTools,
 	}
 
-	tool, err := tools.NewTool[map[string]string]("weather", "Get weather",
+	tool, err := tools.NewTool("weather", "Get weather",
 		func(input map[string]string) (string, error) {
 			return "sunny", nil
 		})
@@ -1174,14 +1173,14 @@ func TestSession_ToolCallAssembly_MultipleToolsWithAssembly(t *testing.T) {
 		Tools:    chatTools,
 	}
 
-	tool1, err := tools.NewTool[map[string]string]("tool1", "Tool 1",
+	tool1, err := tools.NewTool("tool1", "Tool 1",
 		func(input map[string]string) (string, error) {
 			return "result1", nil
 		})
 	if err != nil {
 		t.Fatalf("Failed to create tool: %v", err)
 	}
-	tool2, err := tools.NewTool[map[string]string]("tool2", "Tool 2",
+	tool2, err := tools.NewTool("tool2", "Tool 2",
 		func(input map[string]string) (string, error) {
 			return "result2", nil
 		})
@@ -1269,7 +1268,7 @@ func TestSession_ToolCallAssembly_LargeContent(t *testing.T) {
 		Tools:    chatTools,
 	}
 
-	tool, err := tools.NewTool[map[string]string]("search", "Search",
+	tool, err := tools.NewTool("search", "Search",
 		func(input map[string]string) (string, error) {
 			return "results", nil
 		})
@@ -1344,7 +1343,7 @@ func TestSession_MixedTokensAndToolCalls(t *testing.T) {
 		Tools:    chatTools,
 	}
 
-	tool, err := tools.NewTool[map[string]string]("lookup", "Lookup tool",
+	tool, err := tools.NewTool("lookup", "Lookup tool",
 		func(input map[string]string) (string, error) {
 			return "ok", nil
 		})
@@ -1579,7 +1578,7 @@ func TestSession_ToolMessageEmission_Success(t *testing.T) {
 		Tools:    chatTools,
 	}
 
-	tool, err := tools.NewTool[map[string]string]("weather", "Get weather",
+	tool, err := tools.NewTool("weather", "Get weather",
 		func(input map[string]string) (string, error) {
 			return "sunny in Moscow", nil
 		})
@@ -1648,7 +1647,7 @@ func TestSession_ToolMessageEmission_Rejection(t *testing.T) {
 		Tools:    chatTools,
 	}
 
-	tool, err := tools.NewTool[map[string]string]("weather", "Get weather",
+	tool, err := tools.NewTool("weather", "Get weather",
 		func(input map[string]string) (string, error) {
 			return "sunny", nil
 		})
@@ -1717,7 +1716,7 @@ func TestSession_ToolMessageEmission_ExecutionError(t *testing.T) {
 		Tools:    chatTools,
 	}
 
-	tool, err := tools.NewTool[map[string]string]("failing-tool", "Failing tool",
+	tool, err := tools.NewTool("failing-tool", "Failing tool",
 		func(input map[string]string) (string, error) {
 			return "", errors.New("tool execution failed")
 		})
@@ -1786,7 +1785,7 @@ func TestSession_ToolCallResolvedEvent_Accept(t *testing.T) {
 		Tools:    chatTools,
 	}
 
-	tool, err := tools.NewTool[map[string]string]("test-tool", "Test tool",
+	tool, err := tools.NewTool("test-tool", "Test tool",
 		func(input map[string]string) (string, error) {
 			return "result", nil
 		})
@@ -1851,7 +1850,7 @@ func TestSession_ToolCallResolvedEvent_Reject(t *testing.T) {
 		Tools:    chatTools,
 	}
 
-	tool, err := tools.NewTool[map[string]string]("test-tool", "Test tool",
+	tool, err := tools.NewTool("test-tool", "Test tool",
 		func(input map[string]string) (string, error) {
 			return "result", nil
 		})
@@ -1916,14 +1915,14 @@ func TestSession_MultipleToolCalls_Events(t *testing.T) {
 		Tools:    chatTools,
 	}
 
-	tool1, err := tools.NewTool[map[string]string]("tool1", "Tool 1",
+	tool1, err := tools.NewTool("tool1", "Tool 1",
 		func(input map[string]string) (string, error) {
 			return "result1", nil
 		})
 	if err != nil {
 		t.Fatalf("Failed to create tool: %v", err)
 	}
-	tool2, err := tools.NewTool[map[string]string]("tool2", "Tool 2",
+	tool2, err := tools.NewTool("tool2", "Tool 2",
 		func(input map[string]string) (string, error) {
 			return "result2", nil
 		})
@@ -2012,7 +2011,7 @@ func TestSession_EventOrdering(t *testing.T) {
 		Tools:    chatTools,
 	}
 
-	tool, err := tools.NewTool[map[string]string]("test-tool", "Test tool",
+	tool, err := tools.NewTool("test-tool", "Test tool",
 		func(input map[string]string) (string, error) {
 			return "result", nil
 		})
@@ -2097,7 +2096,7 @@ func TestSession_ToolMessageInHistory(t *testing.T) {
 		Tools:    chatTools,
 	}
 
-	tool, err := tools.NewTool[map[string]string]("test-tool", "Test tool",
+	tool, err := tools.NewTool("test-tool", "Test tool",
 		func(input map[string]string) (string, error) {
 			return "history result", nil
 		})
@@ -2159,7 +2158,7 @@ func TestSession_ToolCallDuplicationIssue(t *testing.T) {
 		Tools:    chatTools,
 	}
 
-	tool, err := tools.NewTool[map[string]string]("test-tool", "Test tool",
+	tool, err := tools.NewTool("test-tool", "Test tool",
 		func(input map[string]string) (string, error) {
 			return "result", nil
 		})
@@ -2228,7 +2227,7 @@ func TestSession_ToolCall_DoubleResolveFromCopies(t *testing.T) {
 	}
 
 	execCount := atomic.Int32{}
-	tool, _ := tools.NewTool[map[string]string]("test-tool", "Test tool",
+	tool, _ := tools.NewTool("test-tool", "Test tool",
 		func(input map[string]string) (string, error) {
 			execCount.Add(1)
 			return "result", nil

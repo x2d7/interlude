@@ -33,6 +33,15 @@ func TestMarshalUnmarshalEvent_RoundTrip(t *testing.T) {
 			},
 		},
 		{
+			name:  "EventReasoningMessage",
+			event: NewEventReasoningMessage("reasoning content"),
+			check: func(t *testing.T, result StreamEvent) {
+				e, ok := result.(EventReasoningMessage)
+				require.True(t, ok)
+				assert.Equal(t, "reasoning content", e.Content)
+			},
+		},
+		{
 			name:  "EventToolCall",
 			event: NewEventToolCall("call-123", "my_tool", `{"key":"value"}`),
 			check: func(t *testing.T, result StreamEvent) {

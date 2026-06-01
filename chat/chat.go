@@ -232,7 +232,7 @@ func (c *Chat) handleCompletionEnd(ctx context.Context, state *sessionState) (pr
 	proceed = false
 	// adding collected events to the chat (reasoning, assistant's tokens and tool calls)
 	if state.thinkingBuilder.Len() != 0 {
-		c.AppendEvent(NewEventAssistantMessage(state.thinkingBuilder.String()))
+		c.AppendEvent(NewEventReasoningMessage(state.thinkingBuilder.String()))
 	}
 	if state.builder.Len() != 0 {
 		c.AppendEvent(NewEventAssistantMessage(state.builder.String()))
