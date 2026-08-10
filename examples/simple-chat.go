@@ -1,4 +1,4 @@
-// simple-chat demonstrates a basic multi-turn conversation.
+// simple-chat demonstrates a basic multi-turn conversation using provider-agnostic config.
 package main
 
 import (
@@ -8,9 +8,9 @@ import (
 	"os"
 	"strings"
 
-	"github.com/joho/godotenv"
 	"github.com/x2d7/interlude/chat"
-	openai "github.com/x2d7/interlude/connect/openai"
+	_ "github.com/x2d7/interlude/connect/openai/config"
+	"github.com/x2d7/interlude/provider"
 )
 
 const (
@@ -27,12 +27,32 @@ const (
 func colorize(color, s string) string { return color + s + reset }
 
 func main() {
-	_ = godotenv.Load()
+	// normal way: create config directly
+	// (!add import openai_config "github.com/x2d7/interlude/connect/openai/config")
+	// client := &openai_config.ProviderConfig{
+	// 	Conn: openai_config.Connection{
+	// 		Endpoint: "http://localhost:9000/v1/",
+	// 		APIKey:   "sk-...",
+	// 		Model:    "current",
+	// 	},
+	// }.ToClient()
 
-	client := openai.OpenAIClient{
-		Endpoint: os.Getenv("OPENROUTER_BASEURL"),
-		APIKey:   os.Getenv("OPENROUTER_TOKEN"),
-		Model:    os.Getenv("OPENROUTER_MODEL"),
+	// provider-agnostic way: from JSON string
+	configJSON := `{
+		"provider": "openai",
+		"config": {
+			"conn": {
+				"endpoint": "http://localhost:9000/v1/",
+				"api_key":  "sk-...",
+				"model":    "current"
+			}
+		}
+	}`
+
+	client, err := provider.Deserialize([]byte(configJSON), provider.DefaultRegistry)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "deserialize: %v\n", err)
+		os.Exit(1)
 	}
 
 	c := chat.Chat{
@@ -60,7 +80,7 @@ func main() {
 		fmt.Println()
 		fmt.Print(colorize(bold+green, "Assistant: "))
 
-		for event := range c.SendUserStream(ctx, &client, input) {
+		for event := range c.SendUserStream(ctx, client, input) {
 			switch v := event.(type) {
 
 			case chat.EventToken:
