@@ -229,12 +229,19 @@ func (c *Chat) handleCompletionEnd(ctx context.Context, state *sessionState, sto
 	proceed = false
 	// adding collected events to the chat (reasoning, assistant's tokens and tool calls)
 	if state.thinkingBuilder.Len() != 0 {
-		c.AppendEvent(NewEventReasoningMessage(state.thinkingBuilder.String()))
+		ev := NewEventReasoningMessage(state.thinkingBuilder.String())
+		c.AppendEvent(ev)
+		state.send(ev)
 	}
+	var assistantMsg EventAssistantMessage
 	if state.builder.Len() != 0 {
-		c.AppendEvent(NewEventAssistantMessage(state.builder.String()))
+		assistantMsg = NewEventAssistantMessage(state.builder.String())
+		c.AppendEvent(assistantMsg)
+		state.send(assistantMsg)
 	} else if stopped && state.thinkingBuilder.Len() != 0 {
-		c.AppendEvent(NewEventAssistantMessage(""))
+		assistantMsg = NewEventAssistantMessage("")
+		c.AppendEvent(assistantMsg)
+		state.send(assistantMsg)
 	}
 	for i, call := range state.toolCalls {
 		if stopped && state.lastToolCall != nil && i == len(state.toolCalls)-1 && &state.toolCalls[i] == state.lastToolCall {

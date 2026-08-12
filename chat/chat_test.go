@@ -2331,8 +2331,8 @@ func TestToolPolicy_AutoApprove_ExecutesTools(t *testing.T) {
 		}
 	}
 
-	if execCount < 1 {
-		t.Fatalf("expected tool to be executed at least once, got %d", execCount)
+	if atomic.LoadInt32(&execCount) < 1 {
+		t.Fatalf("expected tool to be executed at least once, got %d", atomic.LoadInt32(&execCount))
 	}
 }
 
