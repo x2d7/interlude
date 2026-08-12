@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"errors"
 	"sync/atomic"
+
+	"github.com/x2d7/interlude/chat/tools"
 )
 
 // eventType represents the type of event
@@ -89,6 +91,18 @@ func (e *EventToolCall) Resolve(accept bool) error {
 }
 
 func (e EventToolCall) getType() eventType { return eventToolCall }
+
+// Execute runs the tool call against a Tools registry and returns the result.
+// It can be called independently, outside of the session flow. For ToolPolicyManual
+// and ToolPolicyAutoApprove modes, this method is NOT needed — tools are executed
+// automatically by the session. Use this only when you want to execute a tool call
+// manually (e.g., in ToolPolicyExitAfter mode where the session has ended, or for
+// ad-hoc execution). The returned EventToolMessage is NOT added to chat history
+// automatically — you must call chat.AppendEvent() yourself if you want to persist it.
+func (e EventToolCall) Execute(t *tools.Tools) EventToolMessage {
+	result, success := t.Execute(e.Name, e.Content)
+	return NewEventToolMessage(e.CallID, result, success)
+}
 
 // NewEventToolCall creates a new EventToolCall
 func NewEventToolCall(callID, name string, arguments string) EventToolCall {
