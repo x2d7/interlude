@@ -2258,3 +2258,71 @@ func TestSession_ToolCall_DoubleResolveFromCopies(t *testing.T) {
 
 	assert.Equal(t, int32(1), execCount.Load(), "tool must be executed exactly once")
 }
+
+// TestSession_CancelSendsCompletionEnded verifies that EventCompletionEnded
+// is always delivered to the consumer even when ctx is cancelled mid-generation.
+func TestSession_CancelSendsCompletionEnded(t *testing.T) {
+	chat := &Chat{
+		Messages: NewMessages(),
+		Tools:    &tools.Tools{},
+	}
+
+	client := &MockClient{
+		StreamingEvents: []StreamEvent{
+			NewEventToken("Hello "),
+			NewEventToken("World"),
+		},
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	events := chat.Session(ctx, client)
+
+	var received []StreamEvent
+	// Collect first few events, then cancel
+	for i := 0; i < 2; i++ {
+		e, ok := <-events
+		if !ok {
+			break
+		}
+		received = append(received, e)
+	}
+	cancel()
+
+	// Drain remaining events
+	for e := range events {
+		received = append(received, e)
+	}
+
+	var completionEndedFound bool
+	for _, e := range received {
+		if _, ok := e.(EventCompletionEnded); ok {
+			completionEndedFound = true
+			break
+		}
+	}
+	if !completionEndedFound {
+		t.Error("Expected EventCompletionEnded to be sent on cancellation, but it was not received")
+	}
+
+	var completionStartFound bool
+	for _, e := range received {
+		if _, ok := e.(EventCompletionStart); ok {
+			completionStartFound = true
+			break
+		}
+	}
+	if !completionStartFound {
+		t.Error("Expected EventCompletionStart to be sent")
+	}
+
+	messages := chat.Messages.Snapshot()
+	var assistant string
+	for _, msg := range messages {
+		if m, ok := msg.(EventAssistantMessage); ok {
+			assistant = m.Content
+		}
+	}
+	if assistant == "" {
+		t.Error("Expected partial assistant message to be saved to history")
+	}
+}
