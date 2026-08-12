@@ -100,17 +100,10 @@ func (c *Chat) Session(ctx context.Context, client Client) <-chan StreamEvent {
 	// skips nil events
 	send := func(event StreamEvent) bool {
 		if event == nil {
-			if ctx.Err() != nil {
-				return false
-			}
 			return true
 		}
-		select {
-		case result <- event:
-			return true
-		case <-ctx.Done():
-			return false
-		}
+		result <- event
+		return true
 	}
 
 	// event handling
@@ -251,14 +244,10 @@ func (c *Chat) handleCompletionEnd(ctx context.Context, state *sessionState, sto
 	}
 
 	// send last tool call if it wasn't sent yet
-	if !state.flushLastToolCall() {
-		return
-	}
+	state.flushLastToolCall()
 
 	// ending current completion
-	if !state.send(NewEventCompletionEnded(state.toolCalls)) {
-		return
-	}
+	state.send(NewEventCompletionEnded(state.toolCalls))
 
 	if len(state.toolCalls) == 0 {
 		return false
