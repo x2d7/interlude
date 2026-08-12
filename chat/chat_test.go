@@ -2259,6 +2259,112 @@ func TestSession_ToolCall_DoubleResolveFromCopies(t *testing.T) {
 	assert.Equal(t, int32(1), execCount.Load(), "tool must be executed exactly once")
 }
 
+// TestToolPolicy_ExitAfter_DoesNotExecuteTools verifies ToolPolicyExitAfter
+// does not execute tools automatically.
+func TestToolPolicy_ExitAfter_DoesNotExecuteTools(t *testing.T) {
+	chat := &Chat{
+		Messages: NewMessages(),
+		Tools:    tools.NewTools(),
+		ToolPolicy: ToolPolicyExitAfter,
+	}
+
+	tool, err := tools.NewTool("test", "Test tool", func(input map[string]string) (string, error) {
+		t.Error("tool should not be executed in ExitAfter mode")
+		return "", nil
+	})
+	if err != nil {
+		t.Fatalf("Failed to create tool: %v", err)
+	}
+	chat.Tools.Add(tool)
+
+	client := &MockClient{
+		StreamingEvents: []StreamEvent{
+			NewEventToolCall("call-1", "test", `{"input":{"a":"b"}}`),
+		},
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	events := chat.Session(ctx, client)
+
+	// Drain until CompletionEnded
+	for e := range events {
+		if _, ok := e.(EventCompletionEnded); ok {
+			cancel()
+			break
+		}
+	}
+}
+
+// TestToolPolicy_AutoApprove_ExecutesTools verifies ToolPolicyAutoApprove
+// executes tools automatically.
+func TestToolPolicy_AutoApprove_ExecutesTools(t *testing.T) {
+	chat := &Chat{
+		Messages: NewMessages(),
+		Tools:    tools.NewTools(),
+		ToolPolicy: ToolPolicyAutoApprove,
+	}
+
+	execCount := int32(0)
+	tool, err := tools.NewTool("test", "Test tool", func(input map[string]string) (string, error) {
+		atomic.AddInt32(&execCount, 1)
+		return "result", nil
+	})
+	if err != nil {
+		t.Fatalf("Failed to create tool: %v", err)
+	}
+	chat.Tools.Add(tool)
+
+	client := &MockClient{
+		StreamingEvents: []StreamEvent{
+			NewEventToolCall("call-1", "test", `{"input":{"a":"b"}}`),
+		},
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	events := chat.Session(ctx, client)
+
+	// Drain until CompletionEnded
+	for e := range events {
+		if _, ok := e.(EventCompletionEnded); ok {
+			cancel()
+			break
+		}
+	}
+
+	if execCount < 1 {
+		t.Fatalf("expected tool to be executed at least once, got %d", execCount)
+	}
+}
+
+// TestEventToolCall_Execute verifies standalone tool execution works.
+func TestEventToolCall_Execute(t *testing.T) {
+	chat := &Chat{
+		Messages: NewMessages(),
+		Tools:    tools.NewTools(),
+	}
+
+	tool, err := tools.NewTool("test", "Test tool", func(input map[string]string) (string, error) {
+		return "executed: " + input["x"], nil
+	})
+	if err != nil {
+		t.Fatalf("Failed to create tool: %v", err)
+	}
+	chat.Tools.Add(tool)
+
+	call := NewEventToolCall("call-1", "test", `{"input":{"x":"1"}}`)
+	msg := call.Execute(chat.Tools)
+
+	if msg.CallID != "call-1" {
+		t.Errorf("expected call_id call-1, got %s", msg.CallID)
+	}
+	if msg.Content != "executed: 1" {
+		t.Errorf("expected executed content, got '%s'", msg.Content)
+	}
+	if !msg.Success {
+		t.Error("expected success=true")
+	}
+}
+
 // TestSession_CancelSendsCompletionEnded verifies that EventCompletionEnded
 // is always delivered to the consumer even when ctx is cancelled mid-generation.
 func TestSession_CancelSendsCompletionEnded(t *testing.T) {
