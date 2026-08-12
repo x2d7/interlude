@@ -288,18 +288,23 @@ func (c *Chat) handleCompletionEnd(ctx context.Context, state *sessionState, sto
 		return true
 	}
 
-	// AutoApprove or ExitAfter
-	for _, call := range state.toolCalls {
-		// emit resolved event
-		if !state.send(NewEventToolCallResolved(call.CallID, true)) {
-			return false
+	// AutoApprove
+	if policy == ToolPolicyAutoApprove {
+		for _, call := range state.toolCalls {
+			// emit resolved event
+			if !state.send(NewEventToolCallResolved(call.CallID, true)) {
+				return false
+			}
+			callResult, success := c.Tools.Execute(call.Name, call.Content)
+			toolMessage := NewEventToolMessage(call.CallID, callResult, success)
+			c.AppendEvent(toolMessage)
+			if !state.send(toolMessage) {
+				return false
+			}
 		}
-		callResult, success := c.Tools.Execute(call.Name, call.Content)
-		toolMessage := NewEventToolMessage(call.CallID, callResult, success)
-		c.AppendEvent(toolMessage)
-		if !state.send(toolMessage) {
-			return false
-		}
+		return true
 	}
-	return policy != ToolPolicyExitAfter
+
+	// ExitAfter: do not execute tools, just exit the session
+	return false
 }
