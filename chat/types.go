@@ -7,12 +7,22 @@ import (
 	"github.com/x2d7/interlude/chat/tools"
 )
 
+// ToolPolicy defines how tool calls are handled
+type ToolPolicy int
+
+const (
+	ToolPolicyManual ToolPolicy = iota
+	ToolPolicyAutoApprove
+	ToolPolicyExitAfter
+)
+
 // Chat is a struct that contains messages and tools for text completion
 type Chat struct {
 	Messages *Messages
 	Tools    *tools.Tools
 
 	DeclinedToolMessage string // default: "Tool call declined"
+	ToolPolicy          ToolPolicy
 }
 
 // Client interface represents the LLM connector client
