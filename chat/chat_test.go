@@ -2263,8 +2263,8 @@ func TestSession_ToolCall_DoubleResolveFromCopies(t *testing.T) {
 // does not execute tools automatically.
 func TestToolPolicy_ExitAfter_DoesNotExecuteTools(t *testing.T) {
 	chat := &Chat{
-		Messages: NewMessages(),
-		Tools:    tools.NewTools(),
+		Messages:   NewMessages(),
+		Tools:      tools.NewTools(),
 		ToolPolicy: ToolPolicyExitAfter,
 	}
 
@@ -2299,8 +2299,8 @@ func TestToolPolicy_ExitAfter_DoesNotExecuteTools(t *testing.T) {
 // executes tools automatically.
 func TestToolPolicy_AutoApprove_ExecutesTools(t *testing.T) {
 	chat := &Chat{
-		Messages: NewMessages(),
-		Tools:    tools.NewTools(),
+		Messages:   NewMessages(),
+		Tools:      tools.NewTools(),
 		ToolPolicy: ToolPolicyAutoApprove,
 	}
 
