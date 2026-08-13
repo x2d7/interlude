@@ -7,12 +7,33 @@ import (
 	"github.com/x2d7/interlude/chat/tools"
 )
 
+// ToolPolicy defines how tool calls are handled
+type ToolPolicy int
+
+const (
+	// ToolPolicyManual — wait for user approval before executing each tool call.
+	// The session pauses, user resolves via EventToolCall.Resolve(), then execution continues.
+	// This is the default mode for interactive tool use.
+	ToolPolicyManual ToolPolicy = iota
+
+	// ToolPolicyAutoApprove — execute tool calls automatically without waiting for user approval.
+	// Tool call results are sent to the consumer stream immediately, and session continues.
+	// Use for fully automated workflows.
+	ToolPolicyAutoApprove
+
+	// ToolPolicyExitAfter — do NOT execute tools automatically. The session ends immediately
+	// after EventCompletionEnded is sent. Tool calls are available in EventCompletionEnded.ToolCalls
+	// and can be executed manually via EventToolCall.Execute() if needed.
+	ToolPolicyExitAfter
+)
+
 // Chat is a struct that contains messages and tools for text completion
 type Chat struct {
 	Messages *Messages
 	Tools    *tools.Tools
 
 	DeclinedToolMessage string // default: "Tool call declined"
+	ToolPolicy          ToolPolicy
 }
 
 // Client interface represents the LLM connector client

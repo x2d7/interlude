@@ -84,6 +84,9 @@ func (c *Chat) ensureDefaults() {
 		t := tools.NewTools()
 		c.Tools = t
 	}
+	if c.ToolPolicy == 0 {
+		c.ToolPolicy = ToolPolicyManual
+	}
 }
 
 func (c *Chat) Session(ctx context.Context, client Client) <-chan StreamEvent {
@@ -97,17 +100,10 @@ func (c *Chat) Session(ctx context.Context, client Client) <-chan StreamEvent {
 	// skips nil events
 	send := func(event StreamEvent) bool {
 		if event == nil {
-			if ctx.Err() != nil {
-				return false
-			}
 			return true
 		}
-		select {
-		case result <- event:
-			return true
-		case <-ctx.Done():
-			return false
-		}
+		result <- event
+		return true
 	}
 
 	// event handling
@@ -144,10 +140,11 @@ func (c *Chat) Session(ctx context.Context, client Client) <-chan StreamEvent {
 
 			select {
 			case <-ctx.Done():
+				c.handleCompletionEnd(ctx, state, true)
 				return
 			case ev, ok := <-state.events:
 				if !ok {
-					if !c.handleCompletionEnd(ctx, state) {
+					if !c.handleCompletionEnd(ctx, state, false) {
 						return
 					}
 					restart = true
@@ -228,62 +225,93 @@ func (c *Chat) Session(ctx context.Context, client Client) <-chan StreamEvent {
 	return result
 }
 
-func (c *Chat) handleCompletionEnd(ctx context.Context, state *sessionState) (proceed bool) {
+func (c *Chat) handleCompletionEnd(ctx context.Context, state *sessionState, stopped bool) (proceed bool) {
 	proceed = false
 	// adding collected events to the chat (reasoning, assistant's tokens and tool calls)
 	if state.thinkingBuilder.Len() != 0 {
-		c.AppendEvent(NewEventReasoningMessage(state.thinkingBuilder.String()))
+		ev := NewEventReasoningMessage(state.thinkingBuilder.String())
+		c.AppendEvent(ev)
+		state.send(ev)
 	}
+	var assistantMsg EventAssistantMessage
 	if state.builder.Len() != 0 {
-		c.AppendEvent(NewEventAssistantMessage(state.builder.String()))
+		assistantMsg = NewEventAssistantMessage(state.builder.String())
+		c.AppendEvent(assistantMsg)
+		state.send(assistantMsg)
+	} else if stopped && state.thinkingBuilder.Len() != 0 {
+		assistantMsg = NewEventAssistantMessage("")
+		c.AppendEvent(assistantMsg)
+		state.send(assistantMsg)
 	}
-	for _, call := range state.toolCalls {
+	for i, call := range state.toolCalls {
+		if stopped && state.lastToolCall != nil && i == len(state.toolCalls)-1 && &state.toolCalls[i] == state.lastToolCall {
+			continue
+		}
 		c.AppendEvent(call)
 	}
 
-	callAmount := len(state.toolCalls)
-
 	// send last tool call if it wasn't sent yet
-	if !state.flushLastToolCall() {
-		return
-	}
+	state.flushLastToolCall()
 
 	// ending current completion
-	if !state.send(NewEventCompletionEnded(state.toolCalls)) {
-		return
+	state.send(NewEventCompletionEnded(state.toolCalls))
+
+	if len(state.toolCalls) == 0 {
+		return false
+	}
+	if stopped {
+		return false
 	}
 
-	if callAmount == 0 {
-		return
-	}
+	policy := c.ToolPolicy
+	if policy == ToolPolicyManual {
+		// initializing approval waiter
+		verdicts := state.approval.Wait(ctx, len(state.toolCalls))
 
-	// initializing approval waiter
-	verdicts := state.approval.Wait(ctx, callAmount)
+		// processing user verdicts
+		for verdict := range verdicts {
+			call := verdict.call
 
-	// processing user verdicts
-	for verdict := range verdicts {
-		call := verdict.call
+			var toolMessage EventToolMessage
 
-		var toolMessage EventToolMessage
-
-		if verdict.Accepted {
-			callResult, success := c.Tools.Execute(call.Name, call.Content)
-			toolMessage = NewEventToolMessage(call.CallID, callResult, success)
-		} else {
-			msg := c.DeclinedToolMessage
-			if msg == "" {
-				msg = DefaultDeclinedToolMessage
+			if verdict.Accepted {
+				callResult, success := c.Tools.Execute(call.Name, call.Content)
+				toolMessage = NewEventToolMessage(call.CallID, callResult, success)
+			} else {
+				msg := c.DeclinedToolMessage
+				if msg == "" {
+					msg = DefaultDeclinedToolMessage
+				}
+				toolMessage = NewEventToolMessage(call.CallID, msg, false)
 			}
-			toolMessage = NewEventToolMessage(call.CallID, msg, false)
-		}
-		// adding tool message to the chat
-		c.AppendEvent(toolMessage)
+			// adding tool message to the chat
+			c.AppendEvent(toolMessage)
 
-		// sending tool message
-		if !state.send(toolMessage) {
-			return
+			// sending tool message
+			if !state.send(toolMessage) {
+				return false
+			}
 		}
+		return true
 	}
 
-	return true
+	// AutoApprove
+	if policy == ToolPolicyAutoApprove {
+		for _, call := range state.toolCalls {
+			// emit resolved event
+			if !state.send(NewEventToolCallResolved(call.CallID, true)) {
+				return false
+			}
+			callResult, success := c.Tools.Execute(call.Name, call.Content)
+			toolMessage := NewEventToolMessage(call.CallID, callResult, success)
+			c.AppendEvent(toolMessage)
+			if !state.send(toolMessage) {
+				return false
+			}
+		}
+		return true
+	}
+
+	// ExitAfter: do not execute tools, just exit the session
+	return false
 }
