@@ -12,21 +12,21 @@ import (
 type ProviderConfig struct {
 	// Connection settings for the OpenAI API, including endpoint, API key, model,
 	// organization, project, retries, and timeout.
-	Conn Connection `json:"conn"`
+	Conn Connection `json:"conn" jsonschema_description:"Connection settings for the OpenAI API, including endpoint, API key, model, organization, project, retries, and timeout."`
 	// Generation parameters controlling sampling, token limits, penalties, and other
 	// model behavior.
-	Gen Generation `json:"gen"`
+	Gen Generation `json:"gen" jsonschema_description:"Generation parameters controlling sampling, token limits, penalties, and other model behavior."`
 	// Cache configuration for prompt caching and safety identifiers.
-	Cache Cache `json:"cache"`
+	Cache Cache `json:"cache" jsonschema_description:"Cache configuration for prompt caching and safety identifiers."`
 	// Response format configuration for structured outputs (text, JSON object, or JSON
 	// schema).
-	Format *ResponseFormat `json:"format,omitempty"`
+	Format *ResponseFormat `json:"format,omitempty" jsonschema_description:"Response format configuration for structured outputs (text, JSON object, or JSON schema)."`
 	// Stop sequences that tell the API when to stop generating tokens.
-	Stop *Stop `json:"stop,omitempty"`
+	Stop *Stop `json:"stop,omitempty" jsonschema_description:"Stop sequences that tell the API when to stop generating tokens."`
 	// Key-value metadata pairs attached to the request for tracking and querying.
-	Meta Metadata `json:"meta,omitempty"`
+	Meta Metadata `json:"meta,omitempty" jsonschema_description:"Key-value metadata pairs attached to the request for tracking and querying."`
 	// Streaming configuration for controlling usage reporting and obfuscation.
-	Stream *StreamConfig `json:"stream,omitempty"`
+	Stream *StreamConfig `json:"stream,omitempty" jsonschema_description:"Streaming configuration for controlling usage reporting and obfuscation."`
 }
 
 func (pc *ProviderConfig) ToClient() *openai_connect.OpenAIClient {
