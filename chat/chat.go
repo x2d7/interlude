@@ -2,6 +2,7 @@ package chat
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	"github.com/x2d7/interlude/chat/tools"
@@ -15,6 +16,19 @@ func (c *Chat) Complete(ctx context.Context, client Client) <-chan StreamEvent {
 	// sending events to the channel in background
 	go func() {
 		defer close(result)
+		// Defense in depth: a client can panic inside NewStreaming/stream.Next
+		// (e.g. a JS-level failure surfaced as a Go panic in wasm). Convert any
+		// such panic into an EventError on the stream instead of crashing the
+		// process. Registered after close(result) so it runs first on unwind
+		// (LIFO), sending the error before the channel is closed.
+		defer func() {
+			if r := recover(); r != nil {
+				select {
+				case result <- NewEventError(fmt.Errorf("completion panicked: %v", r)):
+				case <-ctx.Done():
+				}
+			}
+		}()
 
 		// text completion stream
 		stream := client.NewStreaming(ctx)

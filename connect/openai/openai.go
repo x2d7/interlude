@@ -2,6 +2,7 @@ package openai_connect
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/x2d7/interlude/chat"
 	"github.com/x2d7/interlude/chat/tools"
@@ -23,9 +24,30 @@ type OpenAIClient struct {
 	RequestOptions []option.RequestOption
 }
 
+// validateAPIKey rejects API keys containing non-Latin-1 characters (code
+// points > 0xFF). HTTP header values are ISO-8859-1, and such keys crash the
+// http transport at request time (in wasm, a JS `Headers.append` failure that
+// panics inside the completion goroutine), so they are rejected up front.
+func validateAPIKey(key string) error {
+	for _, r := range key {
+		if r > 0xFF {
+			return fmt.Errorf("openai: API key contains invalid (non-Latin-1) characters")
+		}
+	}
+	return nil
+}
+
 func (c *OpenAIClient) NewStreaming(ctx context.Context) chat.Stream[chat.StreamEvent] {
 	stream := &OpenAIStream{
 		OpenAIClient: c,
+	}
+
+	// Validate the API key BEFORE it is applied to the HTTP client (getClient),
+	// so an invalid key is surfaced as a stream error (an EventError on the
+	// completion stream) instead of a transport panic at request time.
+	if err := validateAPIKey(c.APIKey); err != nil {
+		stream.err = err
+		return stream
 	}
 
 	client := getClient(c)

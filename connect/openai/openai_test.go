@@ -1,6 +1,8 @@
 package openai_connect
 
 import (
+	"context"
+	"strings"
 	"testing"
 
 	"github.com/openai/openai-go/v3"
@@ -505,5 +507,122 @@ func TestSyncInput_PreservesModelAndAPIKey(t *testing.T) {
 	}
 	if newClient.Endpoint != "https://custom.endpoint.com" {
 		t.Errorf("Expected Endpoint to be preserved, got '%s'", newClient.Endpoint)
+	}
+}
+
+// ==================== API key validation + NewStreaming error stream Tests ====================
+
+func TestValidateAPIKey_EmptyIsValid(t *testing.T) {
+	if err := validateAPIKey(""); err != nil {
+		t.Errorf("Expected empty key to be valid, got %v", err)
+	}
+}
+
+func TestValidateAPIKey_PureASCIIIsValid(t *testing.T) {
+	if err := validateAPIKey("sk-test-abc-123"); err != nil {
+		t.Errorf("Expected ASCII key to be valid, got %v", err)
+	}
+}
+
+func TestValidateAPIKey_Latin1BoundaryIsValid(t *testing.T) {
+	// U+00FF (ÿ) is the last valid Latin-1 code point and must be accepted.
+	if err := validateAPIKey("sk-ÿ"); err != nil {
+		t.Errorf("Expected U+00FF (max Latin-1) key to be valid, got %v", err)
+	}
+}
+
+func TestValidateAPIKey_NonLatin1IsRejected(t *testing.T) {
+	// U+0420 (Р) is the first Cyrillic letter — must be rejected.
+	if err := validateAPIKey("sk-Р"); err == nil {
+		t.Error("Expected U+0420 (Cyrillic) key to be rejected")
+	}
+}
+
+func TestValidateAPIKey_ErrorMentionsLatin1(t *testing.T) {
+	err := validateAPIKey("секрет")
+	if err == nil {
+		t.Fatal("Expected non-nil error for non-Latin-1 key")
+	}
+	if !strings.Contains(err.Error(), "non-Latin-1") {
+		t.Errorf("Expected error to mention 'non-Latin-1', got %q", err.Error())
+	}
+}
+
+func TestNewStreaming_NonLatin1APIKey_ReturnsErrorStream(t *testing.T) {
+	client := &OpenAIClient{
+		APIKey: "секретный-ключ",
+		Model:  "gpt-4o",
+	}
+
+	stream := client.NewStreaming(context.Background())
+	if stream == nil {
+		t.Fatal("Expected non-nil stream")
+	}
+	defer stream.Close() // must not panic on the nil SSEStream
+
+	if err := stream.Err(); err == nil {
+		t.Fatal("Expected a non-nil stream error for a non-Latin-1 API key")
+	}
+	if !strings.Contains(stream.Err().Error(), "non-Latin-1") {
+		t.Errorf("Expected error to mention 'non-Latin-1', got %q", stream.Err().Error())
+	}
+	// An error stream must not advance.
+	if stream.Next(context.Background()) {
+		t.Error("Expected Next to return false on an error stream")
+	}
+}
+
+func TestNewStreaming_ValidAPIKey_NoErrorStream(t *testing.T) {
+	client := &OpenAIClient{
+		APIKey: "sk-valid-ascii-key",
+		Model:  "gpt-4o",
+	}
+
+	stream := client.NewStreaming(context.Background())
+	if stream == nil {
+		t.Fatal("Expected non-nil stream")
+	}
+	defer stream.Close()
+
+	if err := stream.Err(); err != nil {
+		t.Errorf("Expected no error for a valid ASCII key, got %v", err)
+	}
+}
+
+// TestSession_NonLatin1APIKey_SurfacesEventError proves the end-to-end
+// contract the wasm owner depends on: a non-Latin-1 API key becomes an
+// EventError on the session stream (NOT a silent/dead generation and NOT a
+// transport panic). This is what lets the owner emit a single `error` event
+// and then still terminate the session cleanly with a completion_ended.
+func TestSession_NonLatin1APIKey_SurfacesEventError(t *testing.T) {
+	c := &chat.Chat{
+		Messages:   chat.NewMessages(),
+		ToolPolicy: chat.ToolPolicyExitAfter,
+	}
+	c.AddMessage(chat.SenderUser{}, "hello")
+
+	cli := &OpenAIClient{
+		APIKey: "ключ-с-кириллицей",
+		Model:  "gpt-4o",
+	}
+
+	var sawError bool
+	var sawCompletionEnded bool
+	for ev := range c.Session(context.Background(), cli) {
+		switch e := ev.(type) {
+		case chat.EventError:
+			sawError = true
+			if e.Error == nil || !strings.Contains(e.Error.Error(), "non-Latin-1") {
+				t.Errorf("Expected EventError to mention 'non-Latin-1', got %v", e.Error)
+			}
+		case chat.EventCompletionEnded:
+			sawCompletionEnded = true
+		}
+	}
+	if !sawError {
+		t.Error("Expected an EventError to be surfaced on the stream")
+	}
+	if !sawCompletionEnded {
+		t.Error("Expected a completion_ended so the session still terminates cleanly")
 	}
 }
