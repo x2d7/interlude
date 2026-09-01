@@ -83,6 +83,16 @@ func (j JSONSchemaDef) JSONSchema() *jsonschema.Schema {
 	}
 }
 
+func (m Metadata) JSONSchema() *jsonschema.Schema {
+	return &jsonschema.Schema{
+		Type:        "object",
+		Description: "Set of key-value pairs that can be attached to the request. Keys are up to 64 characters; values are up to 512 characters.",
+		AdditionalProperties: &jsonschema.Schema{
+			Type: "string",
+		},
+	}
+}
+
 // ProviderConfigSchema generates a JSON Schema document for ProviderConfig
 // and returns it as a map[string]any.
 func ProviderConfigSchema() (map[string]any, error) {

@@ -80,6 +80,11 @@ func (s *OpenAIStream) Err() error {
 }
 
 func (s *OpenAIStream) Close() error {
+	// SSEStream is nil when NewStreaming returned an error stream (e.g. a
+	// rejected API key) — there is nothing to release.
+	if s.SSEStream == nil {
+		return s.err
+	}
 	return s.SSEStream.Close()
 }
 

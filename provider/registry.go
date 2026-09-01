@@ -3,6 +3,7 @@ package provider
 import (
 	"encoding/json"
 	"fmt"
+	"sort"
 	"sync"
 
 	"github.com/x2d7/interlude/chat"
@@ -16,6 +17,12 @@ type ProviderEnvelope struct {
 
 // Handler deserializes provider-specific config bytes into a chat.Client.
 type Handler func(configBytes []byte) (chat.Client, error)
+
+// Provider describes a registered, creatable provider and the JSON Schema for its config.
+type Provider struct {
+	Name   string         `json:"name"`
+	Schema map[string]any `json:"schema"`
+}
 
 // Registry maps provider names to their deserialization handlers.
 type Registry struct {
@@ -75,6 +82,28 @@ func (r *Registry) Schema(name string) (map[string]any, error) {
 		return nil, fmt.Errorf("provider: schema for %q not registered", name)
 	}
 	return handler()
+}
+
+// Providers returns all registered providers that have a schema handler, each with
+// its config schema, sorted by name. A provider whose schema handler fails is skipped.
+func (r *Registry) Providers() []Provider {
+	r.mu.RLock()
+	schemas := make(map[string]SchemaHandler, len(r.schemaMap))
+	for name, handler := range r.schemaMap {
+		schemas[name] = handler
+	}
+	r.mu.RUnlock()
+
+	out := make([]Provider, 0, len(schemas))
+	for name, handler := range schemas {
+		schema, err := handler()
+		if err != nil {
+			continue
+		}
+		out = append(out, Provider{Name: name, Schema: schema})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	return out
 }
 
 // DefaultRegistry is the global registry. Provider packages register their handlers in init().
