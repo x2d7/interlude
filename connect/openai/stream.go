@@ -24,6 +24,12 @@ type OpenAIStream struct {
 	err   error
 	cur   chat.StreamEvent
 
+	finishReason string
+	model        string
+	usage        openai.CompletionUsage
+	toolCalls    []chat.EventToolCall
+	endedSent    bool
+
 	OpenAIClient *OpenAIClient
 	SSEStream    sseStreamer
 }
@@ -61,7 +67,11 @@ func (s *OpenAIStream) Next(ctx context.Context) bool {
 		} else {
 			// put an error if we can't proceed
 			s.err = s.SSEStream.Err()
-			return false
+			if s.err != nil {
+				return false
+			}
+			// emit the final completion event once before ending the stream
+			return s.emitFinalCompletion()
 		}
 	}
 	// processing queue
@@ -104,7 +114,13 @@ func (s *OpenAIStream) handleRawChunk(chunk openai.ChatCompletionChunk) ([]chat.
 // Should not return empty list. It would be considered as an error
 func (s *OpenAIStream) _handleRawChunk(chunk openai.ChatCompletionChunk) ([]chat.StreamEvent, error) {
 	result := make([]chat.StreamEvent, 0)
+	if chunk.Model != "" {
+		s.model = chunk.Model
+	}
 	if len(chunk.Choices) == 0 {
+		if usagePresent(chunk.Usage) {
+			s.usage = chunk.Usage
+		}
 		return result, nil
 	}
 	choice := chunk.Choices[0]
@@ -115,8 +131,9 @@ func (s *OpenAIStream) _handleRawChunk(chunk openai.ChatCompletionChunk) ([]chat
 	refusal := delta.Refusal
 	tools := delta.ToolCalls
 
-	// TODO: Использование FinishReason
-	_ = choice.FinishReason
+	if choice.FinishReason != "" {
+		s.finishReason = choice.FinishReason
+	}
 
 	// Extract reasoning from ExtraFields (not exposed as dedicated field in SDK)
 	if rf, ok := delta.JSON.ExtraFields["reasoning_content"]; ok {
@@ -140,7 +157,41 @@ func (s *OpenAIStream) _handleRawChunk(chunk openai.ChatCompletionChunk) ([]chat
 		name := tool.Function.Name
 		arguments := tool.Function.Arguments
 		result = append(result, chat.NewEventToolCall(tool.ID, name, arguments))
+
+		if tool.ID != "" {
+			s.toolCalls = append(s.toolCalls, chat.NewEventToolCall(tool.ID, name, arguments))
+		} else if len(s.toolCalls) > 0 {
+			last := &s.toolCalls[len(s.toolCalls)-1]
+			last.Content += arguments
+			if name != "" {
+				last.Name = name
+			}
+		}
+	}
+
+	if usagePresent(chunk.Usage) {
+		s.usage = chunk.Usage
 	}
 
 	return result, nil
+}
+
+// emitFinalCompletion builds the completion ended event once at the end of the
+// stream, carrying the assembled tool calls and provider metadata.
+func (s *OpenAIStream) emitFinalCompletion() bool {
+	if s.endedSent {
+		return false
+	}
+
+	model := s.model
+	if model == "" && s.OpenAIClient != nil {
+		model = s.OpenAIClient.Model
+	}
+
+	s.endedSent = true
+	s.cur = chat.NewEventCompletionEndedWithUsage(
+		newCompletionMeta(model, s.usage, s.finishReason),
+		s.toolCalls,
+	)
+	return true
 }

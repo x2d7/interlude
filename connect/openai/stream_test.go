@@ -4,7 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/openai/openai-go/v3"
 	"github.com/x2d7/interlude/chat"
@@ -330,18 +333,32 @@ func TestNext_MultipleEventsInOneChunk_DrainsQueue(t *testing.T) {
 		t.Fatal("Expected non-nil Current() for second event")
 	}
 
-	// Third Next() — queue empty, SSE exhausted
+	// Third Next() — queue empty, SSE exhausted, emits one completion_ended
+	if !s.Next(context.Background()) {
+		t.Fatal("Expected Next() = true for the final completion_ended event")
+	}
+	if _, ok := s.Current().(chat.EventCompletionEnded); !ok {
+		t.Fatalf("Expected EventCompletionEnded, got %T", s.Current())
+	}
+
+	// Fourth Next() — nothing left
 	if s.Next(context.Background()) {
-		t.Fatal("Expected Next() = false after all events consumed")
+		t.Fatal("Expected Next() = false after the completion_ended event")
 	}
 }
 
-func TestNext_SSEExhausted_ReturnsFalse(t *testing.T) {
+func TestNext_SSEExhausted_EmitsCompletionEndedThenFalse(t *testing.T) {
 	mock := newMockSSEStream([]openai.ChatCompletionChunk{}, nil)
 	s := newStream(mock)
 
+	if !s.Next(context.Background()) {
+		t.Fatal("Expected Next() = true for the completion_ended event")
+	}
+	if _, ok := s.Current().(chat.EventCompletionEnded); !ok {
+		t.Fatalf("Expected EventCompletionEnded, got %T", s.Current())
+	}
 	if s.Next(context.Background()) {
-		t.Fatal("Expected Next() = false for empty SSE stream")
+		t.Fatal("Expected Next() = false after the completion_ended event")
 	}
 }
 
@@ -401,12 +418,15 @@ func TestNext_MultipleChunks_AllEventsReceived(t *testing.T) {
 		received = append(received, s.Current())
 	}
 
-	if len(received) != 3 {
-		t.Fatalf("Expected 3 events from 3 chunks, got %d", len(received))
+	if len(received) != 4 {
+		t.Fatalf("Expected 3 token events and 1 completion ended event, got %d", len(received))
+	}
+	if _, ok := received[3].(chat.EventCompletionEnded); !ok {
+		t.Fatalf("Expected EventCompletionEnded at index 3, got %T", received[3])
 	}
 
 	contents := []string{"Hello", " world", "!"}
-	for i, ev := range received {
+	for i, ev := range received[:3] {
 		token, ok := ev.(chat.EventToken)
 		if !ok {
 			t.Fatalf("Expected EventToken at index %d, got %T", i, ev)
@@ -537,5 +557,363 @@ func TestNext_ContextCancellation_StopsStream(t *testing.T) {
 	}
 	if !errors.Is(s.Err(), context.Canceled) {
 		t.Errorf("Expected context.Canceled error, got %v", s.Err())
+	}
+}
+
+// ==================== Usage Event Tests ====================
+
+const usageFinishChunkJSON = `{"id":"c1","object":"chat.completion.chunk","created":1,"model":"gpt-4o","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}`
+
+func chunkFromJSON(t *testing.T, raw string) openai.ChatCompletionChunk {
+	t.Helper()
+	var chunk openai.ChatCompletionChunk
+	if err := json.Unmarshal([]byte(raw), &chunk); err != nil {
+		t.Fatalf("failed to unmarshal chunk: %v", err)
+	}
+	return chunk
+}
+
+func TestNext_CompletionEndedWithUsageAndToolCalls(t *testing.T) {
+	const usageChunkJSON = `{"id":"c1","object":"chat.completion.chunk","created":1,"model":"gpt-4o","choices":[],"usage":{"prompt_tokens":38,"completion_tokens":8,"total_tokens":46,"cost":0.00021,"opencode":{"billing_source":"go","list_cost":2.1e-05,"allowance":1.26e-05,"tokens":{"input":38,"output":8,"reasoning":8}}}}`
+	const toolCallStartJSON = `{"id":"c1","object":"chat.completion.chunk","created":1,"model":"gpt-4o","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call-1","type":"function","function":{"name":"weather","arguments":"{\"ci"}}]},"finish_reason":""}]}`
+	const toolCallEndJSON = `{"id":"c1","object":"chat.completion.chunk","created":1,"model":"gpt-4o","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"ty\":\"Moscow\"}"}}]},"finish_reason":""}]}`
+
+	chunks := []openai.ChatCompletionChunk{
+		chunkFromJSON(t, `{"id":"c1","object":"chat.completion.chunk","created":1,"model":"gpt-4o","choices":[{"index":0,"delta":{"content":"Hello"},"finish_reason":""}]}`),
+		chunkFromJSON(t, toolCallStartJSON),
+		chunkFromJSON(t, toolCallEndJSON),
+		chunkFromJSON(t, usageFinishChunkJSON),
+		chunkFromJSON(t, usageChunkJSON),
+		chunkFromJSON(t, usageChunkJSON),
+	}
+	s := newStream(newMockSSEStream(chunks, nil))
+
+	var ended []chat.EventCompletionEnded
+	for s.Next(context.Background()) {
+		if event, ok := s.Current().(chat.EventCompletionEnded); ok {
+			ended = append(ended, event)
+		}
+	}
+
+	if len(ended) != 1 {
+		t.Fatalf("Expected exactly 1 completion ended event, got %d", len(ended))
+	}
+	completion := ended[0]
+
+	if completion.PromptTokens != 38 || completion.CompletionTokens != 8 || completion.TotalTokens != 46 {
+		t.Errorf("Unexpected tokens: %+v", completion)
+	}
+	if completion.CostUSD != 0.00021 {
+		t.Errorf("Expected cost 0.00021, got %v", completion.CostUSD)
+	}
+	if completion.ListCostUSD != 2.1e-05 {
+		t.Errorf("Expected list cost 2.1e-05, got %v", completion.ListCostUSD)
+	}
+	if completion.BillingSource != "go" {
+		t.Errorf("Expected billing source 'go', got '%s'", completion.BillingSource)
+	}
+	if completion.FinishReason != "stop" {
+		t.Errorf("Expected finish reason 'stop', got '%s'", completion.FinishReason)
+	}
+	if completion.Model != "gpt-4o" {
+		t.Errorf("Expected model 'gpt-4o', got '%s'", completion.Model)
+	}
+	if completion.Metadata["opencode.allowance"] != "1.26e-05" {
+		t.Errorf("Expected allowance metadata, got %v", completion.Metadata)
+	}
+	if completion.Metadata["opencode.tokens"] != `{"input":38,"output":8,"reasoning":8}` {
+		t.Errorf("Expected tokens metadata, got %v", completion.Metadata)
+	}
+
+	if len(completion.ToolCalls) != 1 {
+		t.Fatalf("Expected 1 assembled tool call, got %d: %+v", len(completion.ToolCalls), completion.ToolCalls)
+	}
+	toolCall := completion.ToolCalls[0]
+	if toolCall.CallID != "call-1" || toolCall.Name != "weather" {
+		t.Errorf("Unexpected tool call: %+v", toolCall)
+	}
+	if toolCall.Content != `{"city":"Moscow"}` {
+		t.Errorf("Expected assembled arguments, got '%s'", toolCall.Content)
+	}
+}
+
+func TestNext_CompletionEndedWithoutUsage(t *testing.T) {
+	s := newStream(newMockSSEStream([]openai.ChatCompletionChunk{
+		chunkFromJSON(t, usageFinishChunkJSON),
+	}, nil))
+
+	if !s.Next(context.Background()) {
+		t.Fatal("Expected a completion ended event")
+	}
+	completion, ok := s.Current().(chat.EventCompletionEnded)
+	if !ok {
+		t.Fatalf("Expected EventCompletionEnded, got %T", s.Current())
+	}
+
+	if completion.FinishReason != "stop" {
+		t.Errorf("Expected finish reason 'stop', got '%s'", completion.FinishReason)
+	}
+	if completion.PromptTokens != 0 || completion.CompletionTokens != 0 || completion.TotalTokens != 0 {
+		t.Errorf("Expected zero tokens, got %+v", completion)
+	}
+	if completion.CostUSD != 0 || completion.ListCostUSD != 0 || completion.BillingSource != "" {
+		t.Errorf("Expected zero cost fields, got %+v", completion)
+	}
+	if completion.Model != "gpt-4o" {
+		t.Errorf("Expected model 'gpt-4o', got '%s'", completion.Model)
+	}
+
+	if s.Next(context.Background()) {
+		t.Error("Expected the completion ended event only once")
+	}
+}
+
+func TestCompletionMetaFromCompletion_FakeServer(t *testing.T) {
+	tests := []struct {
+		name       string
+		body       string
+		prompt     int64
+		completion int64
+		total      int64
+		cost       float64
+		listCost   float64
+		billing    string
+		metadata   int
+	}{
+		{
+			name:       "vendor fields",
+			body:       `{"id":"c1","object":"chat.completion","created":1,"model":"gpt-4o","choices":[{"index":0,"finish_reason":"stop","message":{"role":"assistant","content":"ok"}}],"usage":{"prompt_tokens":38,"completion_tokens":8,"total_tokens":46,"cost":0.00021,"opencode":{"billing_source":"go","list_cost":2.1e-05,"allowance":1.26e-05,"tokens":{"input":38,"output":8,"reasoning":8}}}}`,
+			prompt:     38,
+			completion: 8,
+			total:      46,
+			cost:       0.00021,
+			listCost:   2.1e-05,
+			billing:    "go",
+			metadata:   2,
+		},
+		{
+			name:       "no vendor fields",
+			body:       `{"id":"c1","object":"chat.completion","created":1,"model":"gpt-4o","choices":[{"index":0,"finish_reason":"stop","message":{"role":"assistant","content":"ok"}}],"usage":{"prompt_tokens":10,"completion_tokens":2,"total_tokens":12}}`,
+			prompt:     10,
+			completion: 2,
+			total:      12,
+			metadata:   0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path != "/chat/completions" {
+					t.Errorf("Unexpected path: %s", r.URL.Path)
+				}
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(tt.body))
+			}))
+			defer srv.Close()
+
+			client := getClient(&OpenAIClient{Endpoint: srv.URL, APIKey: "test-key"})
+			completion, err := client.Chat.Completions.New(context.Background(), openai.ChatCompletionNewParams{
+				Model:    openai.ChatModel("gpt-4o"),
+				Messages: []openai.ChatCompletionMessageParamUnion{openai.UserMessage("hi")},
+			})
+			if err != nil {
+				t.Fatalf("completion failed: %v", err)
+			}
+
+			meta := CompletionMetaFromCompletion(*completion)
+			if meta.PromptTokens != tt.prompt || meta.CompletionTokens != tt.completion || meta.TotalTokens != tt.total {
+				t.Errorf("Expected tokens %d/%d/%d, got %d/%d/%d",
+					tt.prompt, tt.completion, tt.total,
+					meta.PromptTokens, meta.CompletionTokens, meta.TotalTokens)
+			}
+			if meta.CostUSD != tt.cost {
+				t.Errorf("Expected cost %v, got %v", tt.cost, meta.CostUSD)
+			}
+			if meta.ListCostUSD != tt.listCost {
+				t.Errorf("Expected list cost %v, got %v", tt.listCost, meta.ListCostUSD)
+			}
+			if meta.BillingSource != tt.billing {
+				t.Errorf("Expected billing source '%s', got '%s'", tt.billing, meta.BillingSource)
+			}
+			if meta.FinishReason != "stop" {
+				t.Errorf("Expected finish reason 'stop', got '%s'", meta.FinishReason)
+			}
+			if meta.Model != "gpt-4o" {
+				t.Errorf("Expected model 'gpt-4o', got '%s'", meta.Model)
+			}
+			if len(meta.Metadata) != tt.metadata {
+				t.Errorf("Expected %d metadata entries, got %d: %v", tt.metadata, len(meta.Metadata), meta.Metadata)
+			}
+		})
+	}
+}
+
+func TestCompletionMetaFromCompletion_WithoutUsage(t *testing.T) {
+	meta := CompletionMetaFromCompletion(openai.ChatCompletion{})
+	if meta.PromptTokens != 0 || meta.TotalTokens != 0 || meta.CostUSD != 0 {
+		t.Errorf("Expected zero metadata, got %+v", meta)
+	}
+}
+
+// ==================== Streamed Usage Request Tests ====================
+
+// newSSEServer serves the given SSE data chunks and reports the decoded request
+// body on the returned channel.
+func newSSEServer(t *testing.T, chunks []string) (*httptest.Server, <-chan map[string]any) {
+	t.Helper()
+	bodies := make(chan map[string]any, 1)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("failed to decode request body: %v", err)
+			http.Error(w, "bad request body", http.StatusBadRequest)
+			return
+		}
+		bodies <- body
+
+		w.Header().Set("Content-Type", "text/event-stream")
+		for _, chunk := range chunks {
+			if _, err := w.Write([]byte("data: " + chunk + "\n\n")); err != nil {
+				return
+			}
+			if f, ok := w.(http.Flusher); ok {
+				f.Flush()
+			}
+		}
+		_, _ = w.Write([]byte("data: [DONE]\n\n"))
+	}))
+	return srv, bodies
+}
+
+func requestBody(t *testing.T, bodies <-chan map[string]any) map[string]any {
+	t.Helper()
+	select {
+	case body := <-bodies:
+		return body
+	case <-time.After(2 * time.Second):
+		t.Fatal("request body was not captured")
+		return nil
+	}
+}
+
+func streamedUsageChunks() []string {
+	return []string{
+		`{"id":"c1","object":"chat.completion.chunk","created":1,"model":"gpt-4o","choices":[{"index":0,"delta":{"content":"Hello"},"finish_reason":""}]}`,
+		usageFinishChunkJSON,
+		`{"id":"c1","object":"chat.completion.chunk","created":1,"model":"gpt-4o","choices":[],"usage":{"prompt_tokens":38,"completion_tokens":8,"total_tokens":46,"cost":0.00021,"opencode":{"billing_source":"go","list_cost":2.1e-05,"allowance":1.26e-05,"tokens":{"input":38,"output":8,"reasoning":8}}}}`,
+	}
+}
+
+func TestNewStreaming_RequestsUsageAndEmitsCompletionEnded(t *testing.T) {
+	srv, bodies := newSSEServer(t, streamedUsageChunks())
+	defer srv.Close()
+
+	client := &OpenAIClient{
+		Endpoint: srv.URL,
+		APIKey:   "test-key",
+		Model:    "gpt-4o",
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	stream := client.NewStreaming(ctx)
+	defer stream.Close()
+
+	var events []chat.StreamEvent
+	for stream.Next(ctx) {
+		events = append(events, stream.Current())
+	}
+	if err := stream.Err(); err != nil {
+		t.Fatalf("stream error: %v", err)
+	}
+
+	body := requestBody(t, bodies)
+	options, ok := body["stream_options"].(map[string]any)
+	if !ok {
+		t.Fatalf("Expected stream_options in request body, got %v", body)
+	}
+	if options["include_usage"] != true {
+		t.Errorf("Expected include_usage=true, got %v", options["include_usage"])
+	}
+
+	var ended []chat.EventCompletionEnded
+	for _, event := range events {
+		if completion, ok := event.(chat.EventCompletionEnded); ok {
+			ended = append(ended, completion)
+		}
+	}
+	if len(ended) != 1 {
+		t.Fatalf("Expected exactly 1 completion ended event, got %d", len(ended))
+	}
+	completion := ended[0]
+	if completion.PromptTokens != 38 || completion.CompletionTokens != 8 || completion.TotalTokens != 46 {
+		t.Errorf("Unexpected tokens: %+v", completion)
+	}
+	if completion.CostUSD != 0.00021 {
+		t.Errorf("Expected cost 0.00021, got %v", completion.CostUSD)
+	}
+	if completion.ListCostUSD != 2.1e-05 {
+		t.Errorf("Expected list cost 2.1e-05, got %v", completion.ListCostUSD)
+	}
+	if completion.BillingSource != "go" {
+		t.Errorf("Expected billing source 'go', got '%s'", completion.BillingSource)
+	}
+	if completion.FinishReason != "stop" {
+		t.Errorf("Expected finish reason 'stop', got '%s'", completion.FinishReason)
+	}
+	if completion.Model != "gpt-4o" {
+		t.Errorf("Expected model 'gpt-4o', got '%s'", completion.Model)
+	}
+}
+
+func TestNewStreaming_DisableUsageReporting(t *testing.T) {
+	srv, bodies := newSSEServer(t, []string{
+		`{"id":"c1","object":"chat.completion.chunk","created":1,"model":"gpt-4o","choices":[{"index":0,"delta":{"content":"Hello"},"finish_reason":""}]}`,
+		usageFinishChunkJSON,
+	})
+	defer srv.Close()
+
+	client := &OpenAIClient{
+		Endpoint:              srv.URL,
+		APIKey:                "test-key",
+		Model:                 "gpt-4o",
+		DisableUsageReporting: true,
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	stream := client.NewStreaming(ctx)
+	defer stream.Close()
+
+	var ended []chat.EventCompletionEnded
+	for stream.Next(ctx) {
+		if completion, ok := stream.Current().(chat.EventCompletionEnded); ok {
+			ended = append(ended, completion)
+		}
+	}
+	if err := stream.Err(); err != nil {
+		t.Fatalf("stream error: %v", err)
+	}
+
+	body := requestBody(t, bodies)
+	options, ok := body["stream_options"].(map[string]any)
+	if !ok {
+		t.Fatalf("Expected stream_options in request body, got %v", body)
+	}
+	if options["include_usage"] != false {
+		t.Errorf("Expected include_usage=false, got %v", options["include_usage"])
+	}
+
+	if len(ended) != 1 {
+		t.Fatalf("Expected exactly 1 completion ended event, got %d", len(ended))
+	}
+	if ended[0].PromptTokens != 0 || ended[0].TotalTokens != 0 {
+		t.Errorf("Expected zero tokens without usage reporting, got %+v", ended[0])
+	}
+	if ended[0].FinishReason != "stop" {
+		t.Errorf("Expected finish reason 'stop', got '%s'", ended[0].FinishReason)
 	}
 }

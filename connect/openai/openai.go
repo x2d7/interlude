@@ -21,6 +21,10 @@ type OpenAIClient struct {
 	// Params used to generate the response
 	Params openai.ChatCompletionNewParams
 
+	// DisableUsageReporting turns off stream_options.include_usage on streamed
+	// requests. Usage reporting is enabled by default.
+	DisableUsageReporting bool
+
 	RequestOptions []option.RequestOption
 }
 
@@ -55,6 +59,15 @@ func (c *OpenAIClient) NewStreaming(ctx context.Context) chat.Stream[chat.Stream
 
 	if c.Model != "" {
 		params.Model = c.Model
+	}
+
+	// Ask streamed requests for usage by default. An explicit StreamOptions
+	// setting is respected; DisableUsageReporting forces it off.
+	switch {
+	case c.DisableUsageReporting:
+		params.StreamOptions.IncludeUsage = openai.Bool(false)
+	case !params.StreamOptions.IncludeUsage.Valid():
+		params.StreamOptions.IncludeUsage = openai.Bool(true)
 	}
 
 	stream.SSEStream = client.Chat.Completions.NewStreaming(ctx, params)
