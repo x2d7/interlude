@@ -165,6 +165,40 @@ func TestMarshalUnmarshalEvent_RoundTrip(t *testing.T) {
 			},
 		},
 		{
+			name: "EventCompletionEnded_WithMeta",
+			event: func() EventCompletionEnded {
+				meta := CompletionMeta{
+					PromptTokens:     38,
+					CompletionTokens: 8,
+					TotalTokens:      46,
+					CostUSD:          0.00021,
+					ListCostUSD:      0.000021,
+					BillingSource:    "go",
+					FinishReason:     "stop",
+					Model:            "gpt-4o",
+					Metadata:         map[string]string{"opencode.tokens": `{"input":38}`},
+				}
+				return NewEventCompletionEndedWithUsage(meta, []EventToolCall{
+					NewEventToolCall("call-1", "tool_a", `{"x":1}`),
+				})
+			}(),
+			check: func(t *testing.T, result StreamEvent) {
+				e, ok := result.(EventCompletionEnded)
+				require.True(t, ok)
+				assert.Equal(t, int64(38), e.PromptTokens)
+				assert.Equal(t, int64(8), e.CompletionTokens)
+				assert.Equal(t, int64(46), e.TotalTokens)
+				assert.Equal(t, 0.00021, e.CostUSD)
+				assert.Equal(t, 0.000021, e.ListCostUSD)
+				assert.Equal(t, "go", e.BillingSource)
+				assert.Equal(t, "stop", e.FinishReason)
+				assert.Equal(t, "gpt-4o", e.Model)
+				assert.Equal(t, map[string]string{"opencode.tokens": `{"input":38}`}, e.Metadata)
+				require.Len(t, e.ToolCalls, 1)
+				assert.Equal(t, "call-1", e.ToolCalls[0].CallID)
+			},
+		},
+		{
 			name: "EventCompletionEnded_WithToolCalls",
 			event: NewEventCompletionEnded([]EventToolCall{
 				NewEventToolCall("call-1", "tool_a", `{"x":1}`),
@@ -204,6 +238,20 @@ func TestMarshalEvent_ContainsTypeDiscriminator(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, string(data), `"type":"token"`)
 	assert.Contains(t, string(data), `"payload"`)
+}
+
+func TestMarshalEvent_CompletionEndedType(t *testing.T) {
+	data, err := MarshalEvent(NewEventCompletionEnded(nil))
+	require.NoError(t, err)
+	assert.Contains(t, string(data), `"type":"completion_ended"`)
+}
+
+func TestMarshalEvent_CompletionEndedOmitsEmptyMeta(t *testing.T) {
+	data, err := MarshalEvent(NewEventCompletionEnded(nil))
+	require.NoError(t, err)
+	assert.NotContains(t, string(data), `"prompt_tokens"`)
+	assert.NotContains(t, string(data), `"cost_usd"`)
+	assert.NotContains(t, string(data), `"billing_source"`)
 }
 
 func TestUnmarshalEvent_UnknownType(t *testing.T) {

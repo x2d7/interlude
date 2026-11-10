@@ -546,6 +546,63 @@ func TestSession_Refusal(t *testing.T) {
 	}
 }
 
+// TestSession_CompletionEndedMeta tests that the stream's completion ended
+// event is forwarded exactly once with its metadata and is not stored as a
+// message.
+func TestSession_CompletionEndedMeta(t *testing.T) {
+	chat := &Chat{
+		Messages: NewMessages(),
+		Tools:    &tools.Tools{},
+	}
+
+	meta := CompletionMeta{
+		PromptTokens:     38,
+		CompletionTokens: 8,
+		TotalTokens:      46,
+		CostUSD:          0.00021,
+		ListCostUSD:      0.000021,
+		BillingSource:    "go",
+		FinishReason:     "stop",
+		Model:            "gpt-4o",
+	}
+
+	mockClient := NewMockClient()
+	mockClient.SetStreamingEvents([]StreamEvent{
+		NewEventToken("test"),
+		NewEventCompletionEndedWithUsage(meta, nil),
+	})
+
+	events := chat.Session(context.Background(), mockClient)
+
+	var received []StreamEvent
+	for ev := range events {
+		received = append(received, ev)
+	}
+
+	var ended []EventCompletionEnded
+	for _, ev := range received {
+		if e, ok := ev.(EventCompletionEnded); ok {
+			ended = append(ended, e)
+		}
+	}
+	if len(ended) != 1 {
+		t.Fatalf("Expected 1 completion ended event, got %d", len(ended))
+	}
+	if ended[0].PromptTokens != 38 || ended[0].TotalTokens != 46 {
+		t.Errorf("Expected usage metadata to be forwarded, got %+v", ended[0])
+	}
+	if ended[0].BillingSource != "go" || ended[0].FinishReason != "stop" {
+		t.Errorf("Expected cost and finish metadata to be forwarded, got %+v", ended[0])
+	}
+
+	messages := chat.Messages.Snapshot()
+	for _, msg := range messages {
+		if _, ok := msg.(EventCompletionEnded); ok {
+			t.Error("Completion ended event must not be stored in history")
+		}
+	}
+}
+
 // TestSession_Thinking tests that thinking tokens are accumulated and added to history
 func TestSession_Thinking(t *testing.T) {
 	chat := &Chat{
@@ -2284,6 +2341,7 @@ func TestToolPolicy_ExitAfter_DoesNotExecuteTools(t *testing.T) {
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	events := chat.Session(ctx, client)
 
 	// Drain until CompletionEnded
@@ -2305,8 +2363,13 @@ func TestToolPolicy_AutoApprove_ExecutesTools(t *testing.T) {
 	}
 
 	execCount := int32(0)
+	executed := make(chan struct{}, 1)
 	tool, err := tools.NewTool("test", "Test tool", func(input map[string]string) (string, error) {
 		atomic.AddInt32(&execCount, 1)
+		select {
+		case executed <- struct{}{}:
+		default:
+		}
 		return "result", nil
 	})
 	if err != nil {
@@ -2321,6 +2384,7 @@ func TestToolPolicy_AutoApprove_ExecutesTools(t *testing.T) {
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	events := chat.Session(ctx, client)
 
 	// Drain until CompletionEnded
@@ -2331,7 +2395,11 @@ func TestToolPolicy_AutoApprove_ExecutesTools(t *testing.T) {
 		}
 	}
 
-	if atomic.LoadInt32(&execCount) < 1 {
+	// Auto-approved tools run after completion_ended is sent, so wait for the
+	// execution instead of racing the session goroutine.
+	select {
+	case <-executed:
+	case <-time.After(time.Second):
 		t.Fatalf("expected tool to be executed at least once, got %d", atomic.LoadInt32(&execCount))
 	}
 }

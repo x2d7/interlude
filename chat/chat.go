@@ -71,6 +71,7 @@ type sessionState struct {
 	toolCalls       []EventToolCall
 	lastToolCall    *EventToolCall
 	approval        *ApproveWaiter
+	completionEnded *EventCompletionEnded
 }
 
 func (s *sessionState) reset() {
@@ -79,6 +80,7 @@ func (s *sessionState) reset() {
 	s.toolCalls = s.toolCalls[:0]
 	s.lastToolCall = nil
 	s.approval = NewApproveWaiter(s.ctx)
+	s.completionEnded = nil
 }
 
 func (s *sessionState) flushLastToolCall() bool {
@@ -219,6 +221,12 @@ func (c *Chat) Session(ctx context.Context, client Client) <-chan StreamEvent {
 					}
 				case EventRefusal:
 					c.AppendEvent(event)
+				case EventCompletionEnded:
+					// forwarded once from handleCompletionEnd, enriched with
+					// the tool calls assembled during the stream
+					completionEnded := event
+					state.completionEnded = &completionEnded
+					skipEvent = true
 				case EventThinking:
 					state.thinkingBuilder.WriteString(event.Content)
 				}
@@ -268,7 +276,14 @@ func (c *Chat) handleCompletionEnd(ctx context.Context, state *sessionState, sto
 	state.flushLastToolCall()
 
 	// ending current completion
-	state.send(NewEventCompletionEnded(state.toolCalls))
+	ended := NewEventCompletionEnded(state.toolCalls)
+	if state.completionEnded != nil {
+		ended = *state.completionEnded
+		if len(state.toolCalls) > 0 {
+			ended.ToolCalls = state.toolCalls
+		}
+	}
+	state.send(ended)
 
 	if len(state.toolCalls) == 0 {
 		return false

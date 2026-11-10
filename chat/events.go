@@ -53,16 +53,37 @@ func NewEventCompletionStart() EventCompletionStart {
 	return EventCompletionStart{}
 }
 
+// CompletionMeta carries provider metadata for one generation. Absent values
+// are zero or empty. Metadata holds optional provider-specific extras.
+type CompletionMeta struct {
+	PromptTokens     int64             `json:"prompt_tokens,omitempty"`
+	CompletionTokens int64             `json:"completion_tokens,omitempty"`
+	TotalTokens      int64             `json:"total_tokens,omitempty"`
+	CostUSD          float64           `json:"cost_usd,omitempty"`
+	ListCostUSD      float64           `json:"list_cost_usd,omitempty"`
+	BillingSource    string            `json:"billing_source,omitempty"`
+	FinishReason     string            `json:"finish_reason,omitempty"`
+	Model            string            `json:"model,omitempty"`
+	Metadata         map[string]string `json:"metadata,omitempty"`
+}
+
 // EventCompletionEnded represents a completion ended event
-// TODO: добавить finish_reason
 type EventCompletionEnded struct {
 	ToolCalls []EventToolCall `json:"tool_calls,omitempty"`
+	CompletionMeta
 }
 
 func (e EventCompletionEnded) getType() eventType { return eventCompletionEnded }
 
+// NewEventCompletionEnded creates a completion ended event without metadata.
 func NewEventCompletionEnded(toolCalls []EventToolCall) EventCompletionEnded {
 	return EventCompletionEnded{ToolCalls: toolCalls}
+}
+
+// NewEventCompletionEndedWithUsage creates a completion ended event carrying
+// provider metadata such as tokens, cost and finish reason.
+func NewEventCompletionEndedWithUsage(meta CompletionMeta, toolCalls []EventToolCall) EventCompletionEnded {
+	return EventCompletionEnded{ToolCalls: toolCalls, CompletionMeta: meta}
 }
 
 // EventToolCall represents a tool call event
